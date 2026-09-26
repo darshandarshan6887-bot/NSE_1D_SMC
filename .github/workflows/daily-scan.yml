@@ -1,0 +1,69 @@
+# Runs the full NSE scan automatically every trading day, and publishes the
+# dashboard to GitHub Pages. No computer of yours needs to be on for this to run -
+# it executes entirely on GitHub's own servers.
+#
+# Schedule: 16:00 IST = 10:30 UTC, Monday-Friday.
+# GitHub's cron scheduler runs in UTC and does not know about IST directly, so the
+# time below (10:30) is already the UTC equivalent of 4:00 PM IST.
+name: Daily NSE Scan
+
+on:
+  schedule:
+    - cron: "30 10 * * 1-5"      # 10:30 UTC = 16:00 IST, Mon-Fri
+  workflow_dispatch:              # lets you also trigger it manually from the Actions tab
+
+permissions:
+  contents: write                 # needed so the workflow can commit the updated data back
+
+concurrency:
+  group: nse-daily-scan
+  cancel-in-progress: false       # never cancel a scan that's already running
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90            # safety net: kill the job if it somehow hangs
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run the full sync (scan, prices, enrich, validate)
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: python master_sync_all.py --workers 4
+        # --workers 4 (rather than the default 8) is gentler on Yahoo's rate limits,
+        # which matters more from GitHub's shared IP ranges than from a home connection.
+
+      - name: Commit the updated data back to the repository
+        run: |
+          git config user.name "nse-scanner-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add shared-data/stocks.json shared-data/stocks_1h.json shared-data/index_lists.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "Automated scan: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
+
+      - name: Upload logs (kept for 7 days, for troubleshooting only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-logs
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
