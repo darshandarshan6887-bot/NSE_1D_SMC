@@ -8,6 +8,7 @@ import math
 import os
 import re
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional
@@ -212,6 +213,46 @@ def is_rate_limit(e: Exception) -> bool:
     n = type(e).__name__
     msg = str(e).lower()
     return "RateLimit" in n or "429" in msg or "too many requests" in msg
+
+
+def is_auth_hiccup(e: Exception) -> bool:
+    """Yahoo's crumb/session token going bad mid-run (401 'Invalid Crumb' / 'Unauthorized').
+
+    This is Yahoo's unofficial API having a flaky moment, not a code or credentials problem -
+    it typically clears up on its own after a short pause.
+    """
+    msg = str(e).lower()
+    return "invalid crumb" in msg or ("401" in msg and "unauthorized" in msg)
+
+
+def is_retryable_yf_error(e: Exception) -> bool:
+    return is_rate_limit(e) or is_auth_hiccup(e)
+
+
+_YF_COOLDOWN_LOCK = threading.Lock()
+_YF_COOLDOWN_UNTIL = 0.0
+
+
+def yf_cooldown_wait() -> None:
+    """Block until any cooldown set by yf_cooldown_trigger() has elapsed.
+
+    Call this before every Yahoo request so threads that didn't personally hit the
+    crumb error still pause instead of piling more bad requests onto the same broken session.
+    """
+    remaining = _YF_COOLDOWN_UNTIL - time.time()
+    if remaining > 0:
+        time.sleep(remaining)
+
+
+def yf_cooldown_trigger(seconds: float = 20.0) -> None:
+    """Called by a thread that just saw a crumb/auth error - pauses every worker briefly.
+
+    A single crumb failure usually means Yahoo's session is bad for everyone right now, not
+    just for this one symbol, so this stops the whole pool from thrashing while it resets.
+    """
+    global _YF_COOLDOWN_UNTIL
+    with _YF_COOLDOWN_LOCK:
+        _YF_COOLDOWN_UNTIL = max(_YF_COOLDOWN_UNTIL, time.time() + seconds)
 
 
 # ---------------------------------------------------------------------------
