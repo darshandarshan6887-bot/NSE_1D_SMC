@@ -20,8 +20,9 @@ from typing import Any, Dict, List, Optional
 
 import config
 import index_data
-from common import (LockBusy, by_symbol, fmt_ts, get_logger, is_rate_limit, load_stocks, modify_stocks,
-                    norm_symbol, now_ist, parse_ts, pipeline_lock, retry, safe_float)
+from common import (LockBusy, by_symbol, fmt_ts, get_logger, is_auth_hiccup, is_retryable_yf_error,
+                    load_stocks, modify_stocks, norm_symbol, now_ist, parse_ts, pipeline_lock, retry,
+                    safe_float, yf_cooldown_trigger, yf_cooldown_wait)
 
 log = get_logger("enrich")
 CR = 10_000_000
@@ -91,12 +92,15 @@ def needs_enrichment(s: Dict[str, Any], force: bool, now: Optional[datetime] = N
 
 def _yf_info(ticker: str) -> Dict[str, Any]:
     import yfinance as yf
+    yf_cooldown_wait()
     t = yf.Ticker(ticker)
     info: Dict[str, Any] = {}
     try:
         info = t.get_info() or {}
     except Exception as e:                                        # noqa: BLE001
-        if is_rate_limit(e):
+        if is_auth_hiccup(e):
+            yf_cooldown_trigger()
+        if is_retryable_yf_error(e):
             raise
     if not info.get("marketCap"):                                 # lighter endpoint as a fallback
         try:
@@ -118,7 +122,7 @@ def enrich_one(stock: Dict[str, Any], info_fn=_yf_info) -> Dict[str, Any]:
     if group in config.NON_EQUITY_GROUPS or sym.startswith("^"):
         return {"enrich_status": "SKIPPED"}
     try:
-        info = retry(lambda: info_fn(f"{sym}.NS"), tries=config.MAX_RETRIES, base=3.0, retryable=is_rate_limit)
+        info = retry(lambda: info_fn(f"{sym}.NS"), tries=config.MAX_RETRIES, base=3.0, retryable=is_retryable_yf_error)
     except Exception as e:                                        # noqa: BLE001
         return {"enrich_status": "NO_INFO", "enrich_error": f"{type(e).__name__}: {str(e)[:120]}"}
     mc = safe_float(info.get("marketCap"))
