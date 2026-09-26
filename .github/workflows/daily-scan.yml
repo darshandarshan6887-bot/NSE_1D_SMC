@@ -51,7 +51,17 @@ jobs:
         run: |
           git config user.name "nse-scanner-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add shared-data/stocks.json shared-data/stocks_1h.json shared-data/index_lists.json 2>/dev/null || true
+
+          # Stage each data file only if it actually exists. index_lists.json is
+          # optional (only created by update_index_lists.py, not part of the daily
+          # run) - staging it together with the other two in one "git add" command
+          # makes git refuse to stage ANY of them when one file is missing.
+          for f in shared-data/stocks.json shared-data/stocks_1h.json shared-data/index_lists.json; do
+            if [ -f "$f" ]; then
+              git add "$f"
+            fi
+          done
+
           if git diff --cached --quiet; then
             echo "No data changes to commit."
           else
