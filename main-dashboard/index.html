@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Scanner Phase 2 Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08111f;
+      --surface: #0f172a;
+      --surface-2: #121a2b;
+      --surface-3: #182235;
+      --surface-4: #1c2940;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --faint: #64748b;
+      --border: rgba(148, 163, 184, 0.18);
+      --divider: rgba(148, 163, 184, 0.12);
+      --accent: #60a5fa;
+      --accent-2: #93c5fd;
+      --green: #4ade80;
+      --green-soft: rgba(74, 222, 128, 0.14);
+      --red: #f87171;
+      --red-soft: rgba(248, 113, 113, 0.14);
+      --amber: #facc15;
+      --amber-soft: rgba(250, 204, 21, 0.14);
+      --violet: #a78bfa;
+      --violet-soft: rgba(167, 139, 250, 0.16);
+      --teal: #2dd4bf;
+      --teal-soft: rgba(45, 212, 191, 0.14);
+      --radius-lg: 18px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 18px 40px rgba(2, 6, 23, 0.35);
+      --content: 1560px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(96,165,250,0.08), transparent 28%),
+        radial-gradient(circle at top left, rgba(45,212,191,0.05), transparent 24%),
+        linear-gradient(180deg, #07101c 0%, var(--bg) 100%);
+    }
+
+    a { color: inherit; }
+    button, input, select { font: inherit; }
+
+    .wrap { max-width: var(--content); margin: 0 auto; padding: 24px; }
+
+    .hero, .panel, .summary-card, .filter-card, .board, .table-shell, .banner {
+      background: linear-gradient(180deg, rgba(18,26,43,0.96), rgba(11,19,33,0.98));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      border-radius: 24px; padding: 26px; margin-bottom: 18px;
+      position: relative; overflow: hidden;
+    }
+    .hero::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(96,165,250,0.08), transparent 38%, rgba(45,212,191,0.04));
+      pointer-events: none;
+    }
+    .hero-top {
+      position: relative; z-index: 1; display: flex;
+      justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: flex-start;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: clamp(2rem,3vw,3rem); line-height: 1.05; letter-spacing: -0.03em; }
+    .hero p { margin: 0; max-width: 920px; color: var(--muted); line-height: 1.7; font-size: 1rem; }
+    .hero-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.18);
+      background: rgba(15,23,42,0.72); color: var(--text); font-size: 13px; font-weight: 700;
+    }
+
+    .grid, .summary, .boards { display: grid; gap: 16px; }
+    .grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 18px; }
+    .filter-card, .summary-card { border-radius: var(--radius-lg); padding: 14px; }
+    .filter-label, .meta-label {
+      display: block; color: var(--muted); font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 8px;
+    }
+    input, select {
+      width: 100%; border: 1px solid rgba(148,163,184,0.16);
+      background: rgba(15,23,42,0.94); color: var(--text);
+      border-radius: 12px; padding: 11px 12px; min-height: 44px; outline: none;
+    }
+    input:focus, select:focus, button:focus-visible, a:focus-visible {
+      outline: 2px solid rgba(96,165,250,0.45); outline-offset: 2px;
+    }
+
+    .summary { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 18px; }
+    .summary-value { margin-top: 8px; font-size: 1.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+    .summary-value.small { font-size: 0.97rem; line-height: 1.6; color: var(--text); word-break: break-word; }
+
+    .banner {
+      display: flex; gap: 14px; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; padding: 14px 16px;
+      border-radius: var(--radius-lg); margin-bottom: 18px;
+    }
+    .banner-title { font-size: 0.98rem; font-weight: 700; }
+    .banner-sub { margin-top: 4px; color: var(--muted); font-size: 0.92rem; }
+
+    .segmented { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+    .segmented button {
+      min-height: 42px; padding: 10px 14px; border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.16);
+      background: rgba(15,23,42,0.9); color: var(--muted); cursor: pointer;
+      transition: 160ms ease; font-weight: 700;
+    }
+    .segmented button.active {
+      background: rgba(96,165,250,0.18); color: #dbeafe;
+      border-color: rgba(96,165,250,0.32);
+      box-shadow: inset 0 0 0 1px rgba(96,165,250,0.14);
+    }
+
+    .panel, .board, .table-shell { border-radius: var(--radius-lg); overflow: hidden; }
+    .panel-head, .board-head, .table-head {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--divider);
+      background: linear-gradient(180deg, rgba(22,33,52,0.95), rgba(13,20,33,0.95));
+    }
+    .panel-head h2, .board-title, .table-head h2 { margin: 0; font-size: 1.15rem; letter-spacing: -0.02em; }
+    .panel-head p, .table-head p, .board-sub { margin: 4px 0 0; color: var(--muted); font-size: 0.84rem; font-weight: 600; }
+
+    .boards { grid-template-columns: 1fr 1fr; margin-bottom: 18px; }
+    .scroll { max-height: 560px; overflow: auto; }
+    .table-shell .scroll { max-height: 720px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      text-align: left; padding: 12px 14px;
+      border-bottom: 1px solid var(--divider);
+      font-size: 13px; vertical-align: middle; white-space: nowrap;
+    }
+    th {
+      position: sticky; top: 0; z-index: 2; background: #111b2d;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.08em; font-size: 11px; font-weight: 800;
+    }
+    tbody tr:hover td { background: rgba(96,165,250,0.04); }
+    .clickable-row { cursor: pointer; }
+    .row-top20 td:first-child { box-shadow: inset 3px 0 0 #60a5fa; }
+    .row-signal td:first-child { box-shadow: inset 3px 0 0 rgba(250,204,21,0.9); }
+
+    .symbol-link, .company-link { color: var(--accent-2); text-decoration: none; font-weight: 800; }
+    .company-link { font-weight: 700; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+
+    .badge, .pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; border-radius: 999px; font-size: 11px; font-weight: 800;
+      padding: 5px 9px; border: 1px solid transparent;
+    }
+    .pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { background: rgba(96,165,250,0.12); color: #bfdbfe; border-color: rgba(96,165,250,0.2); }
+
+    .badge-high    { background: var(--red-soft);    color: var(--red);    }
+    .badge-low     { background: var(--green-soft);  color: var(--green);  }
+    .badge-neutral { background: var(--amber-soft);  color: var(--amber);  }
+    .badge-equity  { background: var(--green-soft);  color: var(--green);  }
+    .badge-etf     { background: rgba(96,165,250,0.15); color: var(--accent-2); }
+    .badge-fund    { background: var(--violet-soft); color: #c4b5fd; }
+    .badge-debt    { background: var(--amber-soft);  color: var(--amber);  }
+    .badge-index   { background: rgba(45,212,191,0.14); color: var(--teal); }
+    .badge-other   { background: rgba(148,163,184,0.14); color: #cbd5e1; }
+    .badge-large   { background: rgba(96,165,250,0.14); color: #bfdbfe; }
+    .badge-mid     { background: var(--violet-soft); color: #c4b5fd; }
+    .badge-small   { background: var(--amber-soft);  color: var(--amber);  }
+    .badge-sme     { background: var(--red-soft);    color: var(--red);    }
+    .badge-view    { background: rgba(45,212,191,0.12); color: #99f6e4; }
+
+    .mono {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .empty { padding: 24px 16px; text-align: center; color: var(--muted); font-weight: 700; }
+    .toolbar-inline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .footer-note { margin-top: 14px; color: var(--faint); font-size: 12px; line-height: 1.6; }
+
+    @media (max-width: 1100px) { .boards { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) {
+      .wrap { padding: 14px; }
+      .hero { padding: 18px; border-radius: 20px; }
+      .panel-head, .board-head, .table-head, .banner { padding: 14px; }
+      th, td { padding: 10px 10px; font-size: 12px; }
+      .summary-value { font-size: 1.55rem; }
+      .hero h1 { font-size: 1.85rem; }
+      .segmented { width: 100%; }
+      .segmented button { flex: 1 1 100%; }
+    }
+
+    /* ── MULTI-SELECT DROPDOWN ─────────────────────────────────── */
+    .ms-wrap { position: relative; width: 100%; }
+    .ms-btn {
+      width: 100%; min-height: 44px; padding: 10px 36px 10px 12px;
+      border: 1px solid rgba(148,163,184,0.16);
+      background: rgba(15,23,42,0.94); color: var(--text);
+      border-radius: 12px; cursor: pointer; text-align: left;
+      font-size: 14px; font-family: inherit; outline: none;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; white-space: nowrap; overflow: hidden;
+    }
+    .ms-btn:focus { outline: 2px solid rgba(96,165,250,0.45); outline-offset: 2px; }
+    .ms-btn .ms-arrow {
+      flex-shrink: 0; width: 16px; height: 16px; opacity: 0.6;
+      transition: transform 0.2s;
+    }
+    .ms-btn.open .ms-arrow { transform: rotate(180deg); }
+    .ms-btn .ms-label { overflow: hidden; text-overflow: ellipsis; }
+    .ms-badge {
+      flex-shrink: 0; background: var(--accent);
+      color: #07101c; border-radius: 999px;
+      font-size: 11px; font-weight: 800;
+      padding: 1px 7px; line-height: 18px;
+    }
+    .ms-panel {
+      display: none; position: absolute; top: calc(100% + 6px); left: 0;
+      min-width: 100%; max-width: 320px;
+      background: #0f172a; border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 14px; padding: 8px 0; z-index: 999;
+      box-shadow: 0 20px 50px rgba(2,6,23,0.7);
+      max-height: 300px; overflow-y: auto;
+    }
+    .ms-panel.open { display: block; }
+    .ms-search {
+      width: calc(100% - 16px); margin: 4px 8px 8px;
+      padding: 7px 10px; border-radius: 8px;
+      border: 1px solid rgba(148,163,184,0.16);
+      background: rgba(15,23,42,0.94); color: var(--text);
+      font-size: 13px; font-family: inherit; outline: none;
+    }
+    .ms-search:focus { outline: 2px solid rgba(96,165,250,0.35); }
+    .ms-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; cursor: pointer; font-size: 13px;
+      color: var(--text); transition: background 0.12s;
+    }
+    .ms-opt:hover { background: rgba(96,165,250,0.1); }
+    .ms-opt input[type=checkbox] {
+      width: 15px; height: 15px; min-height: unset; border-radius: 4px;
+      accent-color: var(--accent); cursor: pointer; flex-shrink: 0;
+    }
+    .ms-opt.all-opt { border-bottom: 1px solid rgba(148,163,184,0.12); margin-bottom: 4px; font-weight: 700; }
+    .ms-divider { border: none; border-top: 1px solid rgba(148,163,184,0.1); margin: 4px 0; }
+    .ms-clear-btn {
+      display: block; width: calc(100% - 16px); margin: 4px 8px 2px;
+      padding: 6px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.2);
+      background: transparent; color: var(--muted); cursor: pointer;
+      font-size: 12px; font-family: inherit; text-align: center;
+    }
+    .ms-clear-btn:hover { background: rgba(248,113,113,0.1); color: var(--red); }
+  
+    /* ── 3-state BAR toggle ──────────────────────────────────────── */
+    .bar-toggle-wrap {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;
+    }
+    .bar-btn {
+      flex: 0 0 auto;
+      min-width: 42px; height: 42px;
+      border-radius: 10px; border: 1.5px solid rgba(148,163,184,0.22);
+      background: rgba(15,23,42,0.9);
+      color: var(--muted); font-weight: 800; font-size: 13px;
+      cursor: pointer; transition: all 140ms ease;
+      display: flex; align-items: center; justify-content: center;
+      gap: 4px; padding: 0 8px; position: relative;
+      font-family: inherit;
+    }
+    .bar-btn:hover { border-color: rgba(148,163,184,0.4); color: var(--text); }
+
+    /* ALL button — slightly wider */
+    .bar-btn[data-bar="ALL"] { min-width: 52px; font-size: 11px; letter-spacing:0.06em; }
+
+    /* INCLUDE state — green tick */
+    .bar-btn.bar-include {
+      background: rgba(74,222,128,0.18);
+      border-color: rgba(74,222,128,0.55);
+      color: #4ade80;
+      box-shadow: 0 0 0 1px rgba(74,222,128,0.2) inset;
+    }
+    .bar-btn.bar-include::after {
+      content: "✓";
+      font-size: 11px;
+      color: #4ade80;
+      margin-left: 2px;
+    }
+
+    /* EXCLUDE state — red cross */
+    .bar-btn.bar-exclude {
+      background: rgba(248,113,113,0.16);
+      border-color: rgba(248,113,113,0.5);
+      color: #f87171;
+      box-shadow: 0 0 0 1px rgba(248,113,113,0.18) inset;
+    }
+    .bar-btn.bar-exclude::after {
+      content: "✕";
+      font-size: 11px;
+      color: #f87171;
+      margin-left: 2px;
+    }
+
+    /* NEUTRAL state */
+    .bar-btn.bar-neutral { /* default styles above */ }
+
+    /* Legend text below buttons */
+    .bar-toggle-legend {
+      margin-top: 6px; font-size: 11px; color: var(--muted);
+      min-height: 16px; line-height: 1.4;
+      font-weight: 600; letter-spacing: 0.03em;
+    }
+    .bar-toggle-legend .inc { color: #4ade80; }
+    .bar-toggle-legend .exc { color: #f87171; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- HERO -->
+    <section class="hero" aria-labelledby="pageTitle">
+      <div class="hero-top">
+        <div>
+          <h1 id="pageTitle">NSE Scanner Dashboard — Phase 2</h1>
+          <p>Smart Money Concepts screening on NSE equities — ranked signals, market cap categories, index memberships, sector filters, and Top 20 / All Signals / All Stocks view control.</p>
+          <div class="hero-meta">
+            <span class="chip" id="heroRefresh">Last refresh: NA</span>
+            <span class="chip" id="heroDataSource">Data source: loading...</span>
+            <span class="chip" id="heroViewMode">View mode: Top 20 Signals</span>
+          </div>
+        </div>
+        <div class="toolbar-inline">
+          <span class="chip">Dark trading UI</span>
+          <span class="chip">Rank score aware</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCANNER WARNING BANNER -->
+    <div id="scanWarning" style="display:none;margin-bottom:14px;padding:14px 18px;
+      background:rgba(250,204,21,0.1);border:1px solid rgba(250,204,21,0.3);
+      border-radius:14px;color:#fcd34d;font-size:13px;font-weight:700;line-height:1.7;"></div>
+
+    <!-- INDEX PANEL -->
+    <section class="panel" style="margin-bottom:18px;" aria-labelledby="marketContextTitle">
+      <div class="panel-head">
+        <div>
+          <h2 id="marketContextTitle">Market Context — NSE Indices</h2>
+          <p>Live structure on tracked index symbols. Click a row to open its child dashboard.</p>
+        </div>
+        <span class="meta-label" id="indexCount" style="margin:0;">0 indices</span>
+      </div>
+      <div class="scroll" style="max-height:360px; overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Index</th><th>Trend</th><th>Structure</th>
+              <th>Top Signal</th><th>Bottom Signal</th><th>Price</th><th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody id="indexBody">
+            <tr><td colspan="7" class="empty">Loading index data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- FILTERS -->
+    <section class="grid" aria-label="Filters">
+      <div class="filter-card">
+        <label class="filter-label" for="scanTimeframe">Scan timeframe</label>
+        <select id="scanTimeframe">
+          <option value="1D" selected>Day Scan (1D)</option>
+          <option value="1H">Hour Scan (1H)</option>
+        </select>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted);font-weight:600;" id="timeframeLegend">
+          Showing daily structure signals.
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label" for="searchInput">Search</label>
+        <input id="searchInput" type="text" placeholder="Symbol, company, sector, industry, index" />
+      </div>
+      <div class="filter-card">
+        <label class="filter-label" for="fromDate">From date</label>
+        <input id="fromDate" type="date" />
+      </div>
+      <div class="filter-card">
+        <label class="filter-label" for="toDate">To date</label>
+        <input id="toDate" type="date" />
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Latest candle filter</label>
+        <div class="bar-toggle-wrap">
+          <button class="bar-btn bar-neutral" data-bar="ALL" onclick="barToggleClick(this)" title="Show all bars">ALL</button>
+          <button class="bar-btn bar-neutral" data-bar="0" onclick="barToggleClick(this)" title="BAR 0 = signal appeared today">0</button>
+          <button class="bar-btn bar-neutral" data-bar="1" onclick="barToggleClick(this)" title="BAR 1 = signal appeared 1 bar ago">1</button>
+          <button class="bar-btn bar-neutral" data-bar="2" onclick="barToggleClick(this)" title="BAR 2 = signal appeared 2 bars ago">2</button>
+          <button class="bar-btn bar-neutral" data-bar="3" onclick="barToggleClick(this)" title="BAR 3 = signal appeared 3 bars ago">3</button>
+          <button class="bar-btn bar-neutral" data-bar="4" onclick="barToggleClick(this)" title="BAR 4 = signal appeared 4 bars ago">4</button>
+          <button class="bar-btn bar-neutral" data-bar="5" onclick="barToggleClick(this)" title="BAR 5 = signal appeared 5 bars ago">5</button>
+          <button class="bar-btn bar-neutral" data-bar="6" onclick="barToggleClick(this)" title="BAR 6 = signal appeared 6 bars ago">6</button>
+          <button class="bar-btn bar-neutral" data-bar="7" onclick="barToggleClick(this)" title="BAR 7 = signal appeared 7 bars ago">7</button>
+          <button class="bar-btn bar-neutral" data-bar="8" onclick="barToggleClick(this)" title="BAR 8 = signal appeared 8 bars ago">8</button>
+          <button class="bar-btn bar-neutral" data-bar="9" onclick="barToggleClick(this)" title="BAR 9 = signal appeared 9 bars ago">9</button>
+          <button class="bar-btn bar-neutral" data-bar="10" onclick="barToggleClick(this)" title="BAR 10 = signal appeared 10 bars ago">10</button>
+          <button class="bar-btn bar-neutral" data-bar="11" onclick="barToggleClick(this)" title="BAR 11 = signal appeared 11 bars ago">11</button>
+          <button class="bar-btn bar-neutral" data-bar="12" onclick="barToggleClick(this)" title="BAR 12 = signal appeared 12 bars ago">12</button>
+          <button class="bar-btn bar-neutral" data-bar="13" onclick="barToggleClick(this)" title="BAR 13 = signal appeared 13 bars ago">13</button>
+          <button class="bar-btn bar-neutral" data-bar="14" onclick="barToggleClick(this)" title="BAR 14 = signal appeared 14 bars ago">14</button>
+          <button class="bar-btn bar-neutral" data-bar="15" onclick="barToggleClick(this)" title="BAR 15 = signal appeared 15 bars ago">15</button>
+          <button class="bar-btn bar-neutral" data-bar="16" onclick="barToggleClick(this)" title="BAR 16 = signal appeared 16 bars ago">16</button>
+          <button class="bar-btn bar-neutral" data-bar="17" onclick="barToggleClick(this)" title="BAR 17 = signal appeared 17 bars ago">17</button>
+          <button class="bar-btn bar-neutral" data-bar="18" onclick="barToggleClick(this)" title="BAR 18 = signal appeared 18 bars ago">18</button>
+          <button class="bar-btn bar-neutral" data-bar="19" onclick="barToggleClick(this)" title="BAR 19 = signal appeared 19 bars ago">19</button>
+          <button class="bar-btn bar-neutral" data-bar="20" onclick="barToggleClick(this)" title="BAR 20 = signal appeared 20 bars ago">20</button>
+        </div>
+        <div class="bar-toggle-legend" id="barLegend">Showing all bars — click a number to filter</div></div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">High signals</label>
+        <div class="ms-wrap" id="highSignalTypeWrap">
+          <button class="ms-btn" id="highSignalTypeBtn" type="button">
+            <span class="ms-label">All High signals</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="highSignalTypePanel">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All High signals</label>
+            <label class="ms-opt"><input type="checkbox" value="STRONG_HIGH"> Strong High</label>
+            <label class="ms-opt"><input type="checkbox" value="WEAK_HIGH"> Weak High</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Low signals</label>
+        <div class="ms-wrap" id="lowSignalTypeWrap">
+          <button class="ms-btn" id="lowSignalTypeBtn" type="button">
+            <span class="ms-label">All Low signals</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="lowSignalTypePanel">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All Low signals</label>
+            <label class="ms-opt"><input type="checkbox" value="STRONG_LOW"> Strong Low</label>
+            <label class="ms-opt"><input type="checkbox" value="WEAK_LOW"> Weak Low</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Signal quick filter</label>
+        <div class="ms-wrap" id="signalQuickFilterWrap">
+          <button class="ms-btn" id="signalQuickFilterBtn" type="button">
+            <span class="ms-label">All states</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="signalQuickFilterPanel">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All states</label>
+            <label class="ms-opt"><input type="checkbox" value="STRONG_LOW"> Strong Low</label>
+            <label class="ms-opt"><input type="checkbox" value="WEAK_LOW"> Weak Low</label>
+            <label class="ms-opt"><input type="checkbox" value="STRONG_HIGH"> Strong High</label>
+            <label class="ms-opt"><input type="checkbox" value="WEAK_HIGH"> Weak High</label>
+            <label class="ms-opt"><input type="checkbox" value="NO_SIGNAL"> No Signal</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Instrument group</label>
+        <div class="ms-wrap" id="instrumentFilterWrap">
+          <button class="ms-btn" id="instrumentFilterBtn" type="button" aria-haspopup="listbox">
+            <span class="ms-label">All instruments</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="instrumentFilterPanel">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All instruments</label>
+            <label class="ms-opt"><input type="checkbox" value="EQUITY"> EQUITY</label>
+            <label class="ms-opt"><input type="checkbox" value="ETF"> ETF</label>
+            <label class="ms-opt"><input type="checkbox" value="INDEX"> INDEX</label>
+            <label class="ms-opt"><input type="checkbox" value="SME"> SME</label>
+            <label class="ms-opt"><input type="checkbox" value="REIT"> REIT</label>
+            <label class="ms-opt"><input type="checkbox" value="INVIT"> INVIT</label>
+            <label class="ms-opt"><input type="checkbox" value="FUND"> FUND</label>
+            <label class="ms-opt"><input type="checkbox" value="DEBT"> DEBT</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Regular equity filter</label>
+        <div class="ms-wrap" id="equityOnlyWrap">
+          <button class="ms-btn" id="equityOnlyBtn" type="button">
+            <span class="ms-label">All symbols</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="equityOnlyPanel">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All symbols</label>
+            <label class="ms-opt"><input type="checkbox" value="REGULAR"> Regular equity only</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Cap category</label>
+        <div class="ms-wrap" id="capFilterWrap">
+          <button class="ms-btn" id="capFilterBtn" type="button" aria-haspopup="listbox">
+            <span class="ms-label">All caps</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="capFilterPanel">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All caps</label>
+            <label class="ms-opt"><input type="checkbox" value="LARGE_CAP"> Large Cap</label>
+            <label class="ms-opt"><input type="checkbox" value="MID_CAP"> Mid Cap</label>
+            <label class="ms-opt"><input type="checkbox" value="SMALL_CAP"> Small Cap</label>
+            <label class="ms-opt"><input type="checkbox" value="SME"> SME</label>
+            <label class="ms-opt"><input type="checkbox" value="NA"> NA</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Sector</label>
+        <div class="ms-wrap" id="sectorFilterWrap">
+          <button class="ms-btn" id="sectorFilterBtn" type="button" aria-haspopup="listbox">
+            <span class="ms-label">All sectors</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="sectorFilterPanel">
+            <input class="ms-search" type="text" placeholder="Search sectors..." id="sectorSearch">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All sectors</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+      <div class="filter-card">
+        <label class="filter-label">Index membership</label>
+        <div class="ms-wrap" id="indexFilterWrap">
+          <button class="ms-btn" id="indexFilterBtn" type="button" aria-haspopup="listbox">
+            <span class="ms-label">All indices</span>
+            <svg class="ms-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <div class="ms-panel" id="indexFilterPanel">
+            <input class="ms-search" type="text" placeholder="Search indices..." id="indexSearch">
+            <label class="ms-opt all-opt"><input type="checkbox" value="ALL" checked> All indices</label>
+            <button class="ms-clear-btn" type="button">Clear selection</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUMMARY -->
+    <section class="summary" aria-label="Summary cards">
+      <div class="summary-card">
+        <div class="meta-label">Visible Stocks</div>
+        <div class="summary-value" id="totalStocks">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">Active Signals</div>
+        <div class="summary-value" id="activeSignals">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">High Board Count</div>
+        <div class="summary-value" id="highCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">Low Board Count</div>
+        <div class="summary-value" id="lowCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">Regular Equity</div>
+        <div class="summary-value" id="equityCount">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">Visible Large / Mid / Small</div>
+        <div class="summary-value small" id="capSummary">0 / 0 / 0</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">Current View</div>
+        <div class="summary-value small" id="currentViewSummary">Top 20 Signals</div>
+      </div>
+      <div class="summary-card">
+        <div class="meta-label">Last Refresh</div>
+        <div class="summary-value small" id="lastRefresh">NA</div>
+      </div>
+    </section>
+
+    <!-- VIEW MODE BANNER -->
+    <section class="banner" aria-label="View controls">
+      <div>
+        <div class="banner-title" id="filterBannerTitle">Market scan ready.</div>
+        <div class="banner-sub" id="filterBannerSub">Controls operate on the current filtered subset.</div>
+      </div>
+      <div class="segmented" role="tablist">
+        <button id="viewTop20"  class="active" type="button" data-view="TOP20">Show Top 20 Signals</button>
+        <button id="viewSignals" type="button" data-view="SIGNALS">Show All Signals</button>
+        <button id="viewAll"     type="button" data-view="ALL">Show All Stocks</button>
+      </div>
+    </section>
+
+    <!-- HIGH / LOW BOARDS -->
+    <section class="boards">
+      <div class="board">
+        <div class="board-head">
+          <div>
+            <h2 class="board-title">Top 20 High Signals</h2>
+            <div class="board-sub">Sorted by latest top signal time, then bearish rank score.</div>
+          </div>
+          <span class="meta-label" id="highBoardCount" style="margin:0;">0 results</span>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Symbol</th><th>Top Signal</th><th>Time</th>
+                <th>Bars</th><th>Rank</th><th>Cap</th><th>Sector</th><th>Price</th>
+              </tr>
+            </thead>
+            <tbody id="highBoardBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="board">
+        <div class="board-head">
+          <div>
+            <h2 class="board-title">Top 20 Low Signals</h2>
+            <div class="board-sub">Sorted by latest bottom signal time, then bullish rank score.</div>
+          </div>
+          <span class="meta-label" id="lowBoardCount" style="margin:0;">0 results</span>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Symbol</th><th>Bottom Signal</th><th>Time</th>
+                <th>Bars</th><th>Rank</th><th>Cap</th><th>Sector</th><th>Price</th>
+              </tr>
+            </thead>
+            <tbody id="lowBoardBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN TABLE -->
+    <section class="table-shell">
+      <div class="table-head">
+        <div>
+          <h2>Main Stock Table</h2>
+          <p>Top 20 / All Signals / All Stocks — rank transparency, signal freshness, index memberships.</p>
+        </div>
+      </div>
+      <div class="scroll" style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th><th>Company</th><th>Series</th><th>Group</th>
+              <th>Cap</th><th>Mkt Cap</th><th>Sector</th><th>Industry</th><th>Indices</th>
+              <th>Signal</th><th>Rank</th><th>Bars</th>
+              <th>Top Signal</th><th>Bottom Signal</th><th>Trend</th>
+              <th>Price</th><th>52W High</th><th>52W Low</th><th>PE</th><th>Avg Vol</th><th>Last Signal</th>
+            </tr>
+          </thead>
+          <tbody id="allStocksBody"></tbody>
+        </table>
+      </div>
+      <div class="footer-note">
+        Expects ../shared-data/stocks.json — run enrich_stocks.py after scanning to populate cap/sector/index fields.
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const APP_CONFIG = {
+      urls: {
+        '1D': '../shared-data/stocks.json',
+        '1H': '../shared-data/stocks_1h.json',
+      }
+    };
+    let allStocks = [];
+    let SCAN_TIMEFRAME = '1D';
+    let currentView = 'TOP20';
+
+    // ── UTILITIES ─────────────────────────────────────────────────────────────
+    function normalizeText(v) {
+      if (v === null || v === undefined) return '';
+      return String(v).trim();
+    }
+
+    function escapeHtml(v) {
+      return String(v)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function safeNumber(v, fallback = null) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function parseDateValue(v) {
+      if (!v || v === 'NA' || v === 'N/A') return null;
+      const d = new Date(String(v).replace(' IST',''));
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    function inDateRange(v, from, to) {
+      const d = parseDateValue(v);
+      if (!d) return false;
+      if (from && d < new Date(from + 'T00:00:00')) return false;
+      if (to   && d > new Date(to   + 'T23:59:59.999')) return false;
+      return true;
+    }
+
+    function formatPrice(v) {
+      const n = Number(v);
+      return Number.isFinite(n)
+        ? '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+        : 'NA';
+    }
+
+    function formatCrore(v) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return 'NA';
+      if (n >= 100000) return '₹' + (n/100000).toFixed(1) + 'L Cr';
+      if (n >= 1000)   return '₹' + (n/1000).toFixed(1) + 'K Cr';
+      return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' Cr';
+    }
+
+    function normalizeSignal(v) {
+      const s = normalizeText(v).toUpperCase().replace(/\s+/g,'_');
+      if (!s || s === 'NOSIGNAL' || s === 'NO-SIGNAL') return 'NO_SIGNAL';
+      return s;
+    }
+
+    function hasValidSignal(stock) {
+      return normalizeSignal(stock.signal) !== 'NO_SIGNAL';
+    }
+
+    // ── 3-state BAR filter state ─────────────────────────────────
+    // barState[n] = 'include' | 'exclude' | 'neutral'
+    const BAR_STATE = {};  // e.g. {0: 'include', 3: 'exclude'}
+
+    function barToggleClick(btn) {
+      const bar = btn.getAttribute('data-bar');
+
+      if (bar === 'ALL') {
+        // Reset all
+        Object.keys(BAR_STATE).forEach(k => delete BAR_STATE[k]);
+        document.querySelectorAll('.bar-btn').forEach(b => {
+          b.className = 'bar-btn bar-neutral';
+        });
+        updateBarLegend();
+        applyFilters();
+        return;
+      }
+
+      const n = parseInt(bar, 10);
+      const cur = BAR_STATE[n] || 'neutral';
+
+      // Cycle: neutral → include → exclude → neutral
+      if (cur === 'neutral') {
+        BAR_STATE[n] = 'include';
+        btn.className = 'bar-btn bar-include';
+      } else if (cur === 'include') {
+        BAR_STATE[n] = 'exclude';
+        btn.className = 'bar-btn bar-exclude';
+      } else {
+        delete BAR_STATE[n];
+        btn.className = 'bar-btn bar-neutral';
+      }
+
+      // Deactivate ALL button
+      document.querySelector('.bar-btn[data-bar="ALL"]').className = 'bar-btn bar-neutral';
+
+      updateBarLegend();
+      applyFilters();
+    }
+
+    function updateBarLegend() {
+      const legend = document.getElementById('barLegend');
+      if (!legend) return;
+      const inc = Object.entries(BAR_STATE).filter(([,v])=>v==='include').map(([k])=>k);
+      const exc = Object.entries(BAR_STATE).filter(([,v])=>v==='exclude').map(([k])=>k);
+      if (!inc.length && !exc.length) {
+        legend.innerHTML = 'Showing all bars — click a number to filter';
+        return;
+      }
+      let parts = [];
+      if (inc.length) parts.push('<span class="inc">✓ Show only BAR ' + inc.sort((a,b)=>+a-+b).join(', ') + '</span>');
+      if (exc.length) parts.push('<span class="exc">✕ Exclude BAR ' + exc.sort((a,b)=>+a-+b).join(', ') + '</span>');
+      legend.innerHTML = parts.join('  ');
+    }
+
+    function passesBarFilter(v, _unused) {
+      const inc = Object.entries(BAR_STATE).filter(([,s])=>s==='include').map(([k])=>parseInt(k));
+      const exc = Object.entries(BAR_STATE).filter(([,s])=>s==='exclude').map(([k])=>parseInt(k));
+
+      // No active filters → all pass
+      if (!inc.length && !exc.length) return true;
+
+      const n = safeNumber(v);
+      if (n === null || n < 0) return inc.length === 0; // no value: pass only if not in include-only mode
+
+      // Include mode: must be one of the included bars
+      if (inc.length && !inc.includes(n)) return false;
+
+      // Exclude mode: must NOT be one of the excluded bars
+      if (exc.includes(n)) return false;
+
+      return true;
+    }
+
+    function safeDashboardUrl(stock) {
+      const raw = normalizeText(stock.dashboard_url);
+      if (!raw || raw === '#') return null;
+      if (raw.startsWith('http')||raw.startsWith('/')||
+          raw.startsWith('./')||raw.startsWith('../')) return raw;
+      return null;
+    }
+
+    // ── SCHEMA NORMALIZATION ──────────────────────────────────────────────────
+    // FIX: Read snake_case keys directly from raw JSON (stocks.json stores them
+    // as snake_case). The original code read camelCase/no-underscore keys which
+    // never matched — causing all multi-word fields to return undefined.
+    function normalizeRecord(raw) {
+      // index_memberships: stored as JSON array by enrich_stocks.py
+      // Handle both array (new) and comma-string (legacy) gracefully
+      let memberships = [];
+      const rawMemb = raw.index_memberships;
+      if (Array.isArray(rawMemb)) {
+        memberships = rawMemb;
+      } else if (typeof rawMemb === 'string' && rawMemb) {
+        memberships = rawMemb.split(',').map(v => v.trim()).filter(Boolean);
+      }
+
+      return {
+        symbol:           normalizeText(raw.symbol),
+        company_name:     normalizeText(raw.company_name),      // FIX: was raw.companyname
+        series:           normalizeText(raw.series),
+        instrument_group: normalizeText(raw.instrument_group),  // FIX: was raw.instrumentgroup
+        is_regular_equity: raw.is_regular_equity === true,      // FIX: was raw.isregularequity
+
+        sector:           normalizeText(raw.sector),
+        industry:         normalizeText(raw.industry),
+        cap_category:     normalizeText(raw.cap_category),      // FIX: was raw.capcategory
+        index_memberships: memberships,                          // FIX: was raw.indexmemberships (string split)
+
+        signal:           normalizeText(raw.signal),
+        top_signal:       normalizeText(raw.top_signal),        // FIX: was raw.topsignal
+        bottom_signal:    normalizeText(raw.bottom_signal),     // FIX: was raw.bottomsignal
+        signal_rank_score:  safeNumber(raw.signal_rank_score, 0),   // FIX: was raw.signalrankscore
+        bullish_rank_score: safeNumber(raw.bullish_rank_score, 0),  // FIX: was raw.bullishrankscore
+        bearish_rank_score: safeNumber(raw.bearish_rank_score, 0),  // FIX: was raw.bearishrankscore
+        bars_since_signal:  safeNumber(raw.bars_since_signal, null), // FIX: was raw.barssincesignal
+        top_bars_since:     safeNumber(raw.top_bars_since, null),    // FIX: was raw.topbarssince
+        bottom_bars_since:  safeNumber(raw.bottom_bars_since, null), // FIX: was raw.bottombarssince
+
+        last_signal_time:   normalizeText(raw.last_signal_time),    // FIX: was raw.lastsignaltime
+        top_signal_time:    normalizeText(raw.top_signal_time),     // FIX: was raw.topsignaltime
+        bottom_signal_time: normalizeText(raw.bottom_signal_time),  // FIX: was raw.bottomsignaltime
+
+        // current_price: stored as 'cmp'/'latest_price'/'last_price' in some versions
+        // Fall through all known field names to find the actual price
+        current_price: safeNumber(
+          raw.current_price ?? raw.cmp ?? raw.latest_price ??
+          raw.last_price ?? raw.close, null
+        ),
+        market_cap_cr:  safeNumber(raw.market_cap_cr, null),   // FIX: was raw.marketcapcr
+
+        trend:          normalizeText(raw.trend),
+        last_updated:   normalizeText(raw.last_updated),        // FIX: was raw.lastupdated
+        scan_date:      normalizeText(raw.scan_date),           // FIX: was raw.scandate
+        enriched_date:  normalizeText(raw.enriched_date),       // FIX: was raw.enricheddate
+
+        dashboard_url:  normalizeText(raw.dashboard_url),      // FIX: was raw.dashboardurl
+        tradingview_url:normalizeText(raw.tradingview_url),    // FIX: was raw.tradingviewurl
+
+        structure_event: normalizeText(raw.structure_event),
+
+        // Enrichment extras — shown in main table
+        pe_ratio:    safeNumber(raw.pe_ratio,    null),
+        week52_high: safeNumber(raw.week52_high, null),
+        week52_low:  safeNumber(raw.week52_low,  null),
+        avg_volume:  safeNumber(raw.avg_volume,  null),
+
+        _raw: raw
+      };
+    }
+
+    // ── BADGES ────────────────────────────────────────────────────────────────
+    function getSignalBadge(signal) {
+      const s = normalizeSignal(signal);
+      if (s.includes('HIGH')) return `<span class="badge badge-high">${s}</span>`;
+      if (s.includes('LOW'))  return `<span class="badge badge-low">${s}</span>`;
+      return `<span class="badge badge-neutral">${s}</span>`;
+    }
+
+    function getGroupBadge(group) {
+      const g = normalizeText(group).toUpperCase() || 'OTHER';
+      if (g==='EQUITY') return '<span class="badge badge-equity">EQUITY</span>';
+      if (g==='ETF')    return '<span class="badge badge-etf">ETF</span>';
+      if (g==='FUND')   return '<span class="badge badge-fund">FUND</span>';
+      if (g==='DEBT')   return '<span class="badge badge-debt">DEBT</span>';
+      if (g==='INDEX')  return '<span class="badge badge-index">INDEX</span>';
+      return `<span class="badge badge-other">${g}</span>`;
+    }
+
+    // FIX: cap_category values are LARGE_CAP / MID_CAP / SMALL_CAP (with underscore)
+    // Old code compared against LARGECAP/MIDCAP/SMALLCAP → never matched
+    function getCapBadge(cap) {
+      const c = normalizeText(cap).toUpperCase();
+      if (c==='LARGE_CAP') return '<span class="badge badge-large">LARGE</span>';
+      if (c==='MID_CAP')   return '<span class="badge badge-mid">MID</span>';
+      if (c==='SMALL_CAP') return '<span class="badge badge-small">SMALL</span>';
+      if (c==='SME')       return '<span class="badge badge-sme">SME</span>';
+      return `<span class="badge badge-other">${c||'NA'}</span>`;
+    }
+
+    function renderIndexPills(items) {
+      if (!Array.isArray(items) || !items.length)
+        return '<span class="muted">—</span>';
+      // Short labels for space
+      const short = {
+        'Nifty 50':'N50','Nifty Next 50':'NN50','Nifty 100':'N100',
+        'Nifty Midcap 150':'NM150','Nifty Smallcap 250':'NS250','Nifty 500':'N500',
+        'Nifty IT':'IT','Nifty Bank':'BANK','Nifty Pharma':'PHARMA',
+        'Nifty Auto':'AUTO','Nifty FMCG':'FMCG','Nifty Metal':'METAL',
+        'Nifty Energy':'ENERGY','Nifty Financial Services':'FIN',
+        'Nifty Realty':'REALTY','Nifty PSU Bank':'PSU BNK','Nifty Infrastructure':'INFRA',
+      };
+      return `<div class="pill-list">${
+        items.map(x=>`<span class="pill" title="${escapeHtml(x)}">${escapeHtml(short[x]||x)}</span>`).join('')
+      }</div>`;
+    }
+
+    function trendColor(t) {
+      const s = normalizeText(t).toUpperCase();
+      if (s==='BULLISH') return 'var(--green)';
+      if (s==='BEARISH') return 'var(--red)';
+      return 'var(--muted)';
+    }
+
+    // ── MULTI-SELECT ENGINE ───────────────────────────────────────────
+    // State: map of filterId → Set of selected values ('ALL' means no filter)
+    const MS_STATE = {
+      capFilter:        new Set(['ALL']),
+      sectorFilter:     new Set(['ALL']),
+      indexFilter:      new Set(['ALL']),
+      instrumentFilter: new Set(['ALL']),
+      latestBars:       new Set(['ALL']),
+      highSignalType:   new Set(['ALL']),
+      lowSignalType:    new Set(['ALL']),
+      signalQuickFilter:new Set(['ALL']),
+      equityOnly:       new Set(['ALL']),
+    };
+
+    function msGetSelected(id) { return MS_STATE[id] || new Set(['ALL']); }
+
+    function msIsAll(id) {
+      const s = msGetSelected(id);
+      return s.has('ALL') || s.size === 0;
+    }
+
+    function msMatches(id, value) {
+      if (msIsAll(id)) return true;
+      return msGetSelected(id).has(String(value || '').toUpperCase().trim());
+    }
+
+    function msMatchesArray(id, arr) {
+      if (msIsAll(id)) return true;
+      if (!Array.isArray(arr)) return false;
+      const sel = msGetSelected(id);
+      return arr.some(v => sel.has(String(v).trim().toUpperCase()));
+    }
+
+    function msUpdateBtn(id) {
+      const btn   = document.getElementById(id + 'Btn');
+      const label = btn ? btn.querySelector('.ms-label') : null;
+      if (!btn || !label) return;
+      const sel = msGetSelected(id);
+      if (msIsAll(id)) {
+        const defaults = {
+          capFilter:'All caps', sectorFilter:'All sectors',
+          indexFilter:'All indices', instrumentFilter:'All instruments',
+          latestBars:'All candles', highSignalType:'All High signals',
+          lowSignalType:'All Low signals', signalQuickFilter:'All states',
+          equityOnly:'All symbols'
+        };
+        label.textContent = defaults[id] || 'All';
+        const badge = btn.querySelector('.ms-badge');
+        if (badge) badge.remove();
+      } else {
+        const vals = [...sel];
+        label.textContent = vals.length === 1 ? vals[0] : `${vals.length} selected`;
+        let badge = btn.querySelector('.ms-badge');
+        if (!badge) { badge = document.createElement('span'); badge.className = 'ms-badge'; btn.insertBefore(badge, btn.querySelector('.ms-arrow')); }
+        badge.textContent = vals.length;
+      }
+    }
+
+    function msUpdateCheckboxes(id) {
+      const panel = document.getElementById(id + 'Panel');
+      if (!panel) return;
+      const sel = msGetSelected(id);
+      const isAll = msIsAll(id);
+      panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        if (cb.value === 'ALL') cb.checked = isAll;
+        else cb.checked = sel.has(cb.value.toUpperCase().trim());
+      });
+    }
+
+    function msToggle(id, value, checked) {
+      const sel = MS_STATE[id];
+      const v = value.toUpperCase().trim();
+      if (v === 'ALL') {
+        sel.clear(); sel.add('ALL');
+      } else {
+        sel.delete('ALL');
+        if (checked) sel.add(v); else sel.delete(v);
+        if (sel.size === 0) sel.add('ALL');
+      }
+      msUpdateBtn(id);
+      msUpdateCheckboxes(id);
+      applyFilters();
+    }
+
+    function msClear(id) {
+      MS_STATE[id] = new Set(['ALL']);
+      msUpdateBtn(id); msUpdateCheckboxes(id); applyFilters();
+    }
+
+    function msPopulateDynamic(id, values) {
+      const panel = document.getElementById(id + 'Panel');
+      if (!panel) return;
+      // Remove old dynamic options (keep all-opt, search, clear button)
+      panel.querySelectorAll('.ms-opt:not(.all-opt)').forEach(el => el.remove());
+      const clearBtn = panel.querySelector('.ms-clear-btn');
+      const sel = msGetSelected(id);
+      values.forEach(v => {
+        const label = document.createElement('label');
+        label.className = 'ms-opt';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = v;
+        cb.checked = sel.has(v.toUpperCase().trim());
+        cb.addEventListener('change', () => msToggle(id, v, cb.checked));
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + v));
+        if (clearBtn) panel.insertBefore(label, clearBtn);
+        else panel.appendChild(label);
+      });
+    }
+
+    function msInitPanel(id) {
+      const btn   = document.getElementById(id + 'Btn');
+      const panel = document.getElementById(id + 'Panel');
+      if (!btn || !panel) return;
+
+      // Toggle open/close
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const isOpen = panel.classList.contains('open');
+        document.querySelectorAll('.ms-panel.open').forEach(p => {
+          p.classList.remove('open');
+          p.previousElementSibling?.classList.remove('open');
+        });
+        if (!isOpen) { panel.classList.add('open'); btn.classList.add('open'); }
+      });
+
+      // Checkboxes
+      panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => msToggle(id, cb.value, cb.checked));
+      });
+
+      // Clear button
+      const clearBtn = panel.querySelector('.ms-clear-btn');
+      if (clearBtn) clearBtn.addEventListener('click', () => msClear(id));
+
+      // Search filter (for dynamic panels)
+      const searchEl = panel.querySelector('.ms-search');
+      if (searchEl) {
+        searchEl.addEventListener('input', () => {
+          const q = searchEl.value.toLowerCase();
+          panel.querySelectorAll('.ms-opt:not(.all-opt)').forEach(opt => {
+            opt.style.display = opt.textContent.toLowerCase().includes(q) ? '' : 'none';
+          });
+        });
+      }
+    }
+
+    // Close all panels on outside click
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.ms-panel.open').forEach(p => {
+        p.classList.remove('open');
+        p.previousElementSibling?.classList.remove('open');
+      });
+    });
+
+    // ── OLD populateDropdown → now populates multi-select panels ──
+    function populateDropdown(selectId, values) {
+      msPopulateDynamic(selectId, values);
+    }
+
+    // ── FILTERING ─────────────────────────────────────────────────────────────
+    function passesCommonFilters(stock) {
+      const q           = document.getElementById('searchInput').value.trim().toLowerCase();
+      // All filters now use MS_STATE (multi-select)
+
+      const text = [
+        stock.symbol, stock.company_name, stock.series, stock.instrument_group,
+        stock.signal, stock.top_signal, stock.bottom_signal, stock.trend,
+        stock.cap_category, stock.sector, stock.industry,
+        ...(Array.isArray(stock.index_memberships) ? stock.index_memberships : [])
+      ].map(normalizeText).join(' ').toLowerCase();
+
+      if (q && !text.includes(q)) return false;
+      if (!msMatches('instrumentFilter', normalizeText(stock.instrument_group).toUpperCase())) return false;
+      // equityOnly multi-select
+      if (!msIsAll('equityOnly')) {
+        const sel = msGetSelected('equityOnly');
+        if (sel.has('REGULAR') && stock.is_regular_equity !== true) return false;
+      }
+
+      // Multi-select cap/sector/index
+      if (!msMatches('capFilter', normalizeText(stock.cap_category).toUpperCase())) return false;
+      if (!msIsAll('sectorFilter')) {
+        const stockSector = normalizeText(stock.sector);
+        const sel = msGetSelected('sectorFilter');
+        if (![...sel].some(v => v.toUpperCase() === stockSector.toUpperCase())) return false;
+      }
+      if (!msMatchesArray('indexFilter', stock.index_memberships)) return false;
+      if (!msIsAll('signalQuickFilter')) {
+        const sig = normalizeSignal(stock.signal);
+        const qSel = msGetSelected('signalQuickFilter');
+        if (!qSel.has(sig)) return false;
+      }
+      return true;
+    }
+
+    function getHighSignals(stocks) {
+      const from = document.getElementById('fromDate').value;
+      const to   = document.getElementById('toDate').value;
+
+      return stocks
+        .filter(passesCommonFilters)
+        .filter(s => {
+          const sig = normalizeSignal(s.top_signal);
+          if (!['STRONG_HIGH','WEAK_HIGH'].includes(sig)) return false;
+          if (!msIsAll('highSignalType') && !msGetSelected('highSignalType').has(sig)) return false;
+          return true;
+        })
+        .filter(s => inDateRange(s.top_signal_time, from, to))
+        .filter(s => passesBarFilter(s.top_bars_since))
+        .sort((a,b) => {
+          const aD=parseDateValue(a.top_signal_time), bD=parseDateValue(b.top_signal_time);
+          if (aD&&bD&&aD-bD!==0) return bD-aD;
+          if (!aD&&bD) return 1; if (aD&&!bD) return -1;
+          return safeNumber(b.bearish_rank_score,0) - safeNumber(a.bearish_rank_score,0);
+        }).slice(0,20);
+    }
+
+    function getLowSignals(stocks) {
+      const from = document.getElementById('fromDate').value;
+      const to   = document.getElementById('toDate').value;
+
+      return stocks
+        .filter(passesCommonFilters)
+        .filter(s => {
+          const sig = normalizeSignal(s.bottom_signal);
+          if (!['STRONG_LOW','WEAK_LOW'].includes(sig)) return false;
+          if (!msIsAll('lowSignalType') && !msGetSelected('lowSignalType').has(sig)) return false;
+          return true;
+        })
+        .filter(s => inDateRange(s.bottom_signal_time, from, to))
+        .filter(s => passesBarFilter(s.bottom_bars_since))
+        .sort((a,b) => {
+          const aD=parseDateValue(a.bottom_signal_time), bD=parseDateValue(b.bottom_signal_time);
+          if (aD&&bD&&aD-bD!==0) return bD-aD;
+          if (!aD&&bD) return 1; if (aD&&!bD) return -1;
+          return safeNumber(b.bullish_rank_score,0) - safeNumber(a.bullish_rank_score,0);
+        }).slice(0,20);
+    }
+
+    function getSignalRank(stock) { return safeNumber(stock.signal_rank_score, 0); }
+
+    function sortByNaturalOrder(stocks) {
+      return [...stocks].sort((a,b) => {
+        const aD=parseDateValue(a.last_signal_time), bD=parseDateValue(b.last_signal_time);
+        if (aD&&bD&&aD-bD!==0) return bD-aD;
+        if (!aD&&bD) return 1; if (aD&&!bD) return -1;
+        return getSignalRank(b) - getSignalRank(a);
+      });
+    }
+
+    function getBarsSinceSignal(stock) {
+      const direct = safeNumber(stock.bars_since_signal);
+      if (direct !== null) return direct;
+      const top = safeNumber(stock.top_bars_since);
+      const bot = safeNumber(stock.bottom_bars_since);
+      const candidates = [top, bot].filter(v => v !== null && v >= 0);
+      return candidates.length ? Math.min(...candidates) : null;
+    }
+
+    function getBaseFilteredStocks(stocks) {
+      const from = document.getElementById('fromDate').value;
+      const to   = document.getElementById('toDate').value;
+      const barsAll = Object.keys(BAR_STATE).length === 0;
+      return stocks.filter(passesCommonFilters).filter(stock => {
+        if (barsAll && !from && !to) return true;
+        const barsSince = getBarsSinceSignal(stock);
+        const hasDateMatch = !hasValidSignal(stock) ? true : inDateRange(stock.last_signal_time, from, to);
+        const hasBarsMatch = barsAll ? true : passesBarFilter(barsSince);
+        if (hasValidSignal(stock)) return hasDateMatch && hasBarsMatch;
+        return barsAll && !from && !to;
+      });
+    }
+
+    function getViewRows(filteredStocks) {
+      const sortedAll    = sortByNaturalOrder(filteredStocks);
+      const activeSignals = sortedAll.filter(hasValidSignal).sort((a,b) => getSignalRank(b)-getSignalRank(a));
+      if (currentView === 'SIGNALS') return { rows: activeSignals, activeSignals, sortedAll, top20: activeSignals.slice(0,20) };
+      if (currentView === 'ALL')     return { rows: sortedAll, activeSignals, sortedAll, top20: activeSignals.slice(0,20) };
+      if (activeSignals.length <= 20) return { rows: sortedAll, activeSignals, sortedAll, top20: activeSignals.slice(0,20) };
+      const top20 = activeSignals.slice(0,20);
+      const topSet = new Set(top20.map(s => s.symbol+'|'+normalizeText(s.last_signal_time)));
+      const remainder = sortedAll.filter(s => !topSet.has(s.symbol+'|'+normalizeText(s.last_signal_time)));
+      return { rows: [...top20, ...remainder], activeSignals, sortedAll, top20 };
+    }
+
+    // ── RENDER ────────────────────────────────────────────────────────────────
+    function renderBoard(bodyId, countId, rows, mode) {
+      const body = document.getElementById(bodyId);
+      document.getElementById(countId).textContent = `${rows.length} results`;
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="9" class="empty">No ${mode}-side signals for selected filters.</td></tr>`;
+        return;
+      }
+      body.innerHTML = rows.map((stock, i) => {
+        const url    = safeDashboardUrl(stock);
+        const bars   = mode==='high' ? safeNumber(stock.top_bars_since) : safeNumber(stock.bottom_bars_since);
+        const score  = mode==='high' ? safeNumber(stock.bearish_rank_score,0) : safeNumber(stock.bullish_rank_score,0);
+        const time   = normalizeText(mode==='high' ? stock.top_signal_time : stock.bottom_signal_time) || 'NA';
+        const signal = mode==='high' ? stock.top_signal : stock.bottom_signal;
+        const symCell= url
+          ? `<a class="symbol-link" href="${escapeHtml(url)}">${escapeHtml(stock.symbol||'NA')}</a>`
+          : `<span class="symbol-link">${escapeHtml(stock.symbol||'NA')}</span>`;
+        return `<tr class="clickable-row row-top20" data-url="${escapeHtml(url||'')}">
+          <td>${i+1}</td>
+          <td>${symCell}<div class="faint" style="font-size:11px">${escapeHtml(stock.company_name||'')}</div></td>
+          <td>${getSignalBadge(signal)}</td>
+          <td class="mono">${escapeHtml(time)}</td>
+          <td class="mono">${bars===null?'NA':bars}</td>
+          <td class="mono">${score}</td>
+          <td>${getCapBadge(stock.cap_category)}</td>
+          <td style="color:var(--muted);font-size:12px">${escapeHtml(normalizeText(stock.sector)||'—')}</td>
+          <td class="mono">${formatPrice(stock.current_price)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderMainTable(rows, top20Symbols) {
+      const body = document.getElementById('allStocksBody');
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="21" class="empty">No stocks found for the selected filters.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(stock => {
+        const url      = safeDashboardUrl(stock);
+        const rank     = getSignalRank(stock);
+        const barsSince= getBarsSinceSignal(stock);
+        const isTop20  = top20Symbols.has(stock.symbol+'|'+normalizeText(stock.last_signal_time));
+        const isSignal = hasValidSignal(stock);
+        const rowClass = isTop20 ? 'row-top20' : (isSignal ? 'row-signal' : '');
+        const sym  = escapeHtml(stock.symbol||'NA');
+        const co   = escapeHtml(stock.company_name||'NA');
+        const symCell = url?`<a class="symbol-link" href="${escapeHtml(url)}">${sym}</a>`:`<span class="symbol-link">${sym}</span>`;
+        const coCell  = url?`<a class="company-link" href="${escapeHtml(url)}">${co}</a>`:`<span class="company-link">${co}</span>`;
+        const rankCell= isSignal?`<span class="badge badge-view">${rank}</span>`:`<span class="muted">0</span>`;
+        return `<tr class="clickable-row ${rowClass}" data-url="${escapeHtml(url||'')}">
+          <td>${symCell}</td>
+          <td>${coCell}</td>
+          <td>${escapeHtml(stock.series||'NA')}</td>
+          <td>${getGroupBadge(stock.instrument_group)}</td>
+          <td>${getCapBadge(stock.cap_category)}</td>
+          <td class="mono">${formatCrore(stock.market_cap_cr)}</td>
+          <td style="font-size:12px;color:var(--muted)">${escapeHtml(stock.sector||'—')}</td>
+          <td style="font-size:12px;color:var(--muted)">${escapeHtml(stock.industry||'—')}</td>
+          <td>${renderIndexPills(stock.index_memberships)}</td>
+          <td>${getSignalBadge(stock.signal)}</td>
+          <td class="mono">${rankCell}</td>
+          <td class="mono">${barsSince===null?'NA':barsSince}</td>
+          <td>${getSignalBadge(stock.top_signal)}</td>
+          <td>${getSignalBadge(stock.bottom_signal)}</td>
+          <td style="font-weight:700;color:${trendColor(stock.trend)}">${escapeHtml(stock.trend||'NA')}</td>
+          <td class="mono">${formatPrice(stock.current_price)}</td>
+          <td class="mono">${stock.week52_high?'₹'+Number(stock.week52_high).toFixed(0):'—'}</td>
+          <td class="mono">${stock.week52_low?'₹'+Number(stock.week52_low).toFixed(0):'—'}</td>
+          <td class="mono">${stock.pe_ratio?Number(stock.pe_ratio).toFixed(1):'—'}</td>
+          <td class="mono">${stock.avg_volume?Number(stock.avg_volume).toLocaleString('en-IN'):'—'}</td>
+          <td class="mono">${escapeHtml(stock.last_signal_time||'NA')}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function updateSummary(visibleRows, activeSignals, top20Rows) {
+      document.getElementById('totalStocks').textContent  = visibleRows.length;
+      document.getElementById('activeSignals').textContent= activeSignals.length;
+      document.getElementById('highCount').textContent = document.getElementById('highBoardCount').textContent.split(' ')[0]||'0';
+      document.getElementById('lowCount').textContent  = document.getElementById('lowBoardCount').textContent.split(' ')[0]||'0';
+      document.getElementById('equityCount').textContent = visibleRows.filter(r => r.is_regular_equity===true).length;
+
+      // FIX: compare against LARGE_CAP / MID_CAP / SMALL_CAP (with underscore)
+      const large = visibleRows.filter(r => normalizeText(r.cap_category).toUpperCase()==='LARGE_CAP').length;
+      const mid   = visibleRows.filter(r => normalizeText(r.cap_category).toUpperCase()==='MID_CAP').length;
+      const small = visibleRows.filter(r => normalizeText(r.cap_category).toUpperCase()==='SMALL_CAP').length;
+      document.getElementById('capSummary').textContent = `${large} / ${mid} / ${small}`;
+
+      let latest = 'NA';
+      for (const r of visibleRows) {
+        const raw = normalizeText(r.last_updated||r.enriched_date||r.scan_date);
+        if (raw && raw!=='NA' && (latest==='NA'||raw>latest)) latest = raw;
+      }
+
+      const viewLabel = currentView==='TOP20'?'Top 20 Signals':currentView==='SIGNALS'?'All Signals':'All Stocks';
+      document.getElementById('currentViewSummary').textContent = viewLabel;
+      document.getElementById('lastRefresh').textContent = latest;
+      document.getElementById('heroRefresh').textContent = 'Last refresh: '+latest;
+      document.getElementById('heroViewMode').textContent = 'View mode: '+viewLabel;
+
+      const n = activeSignals.length, t = top20Rows.length;
+      let title, sub;
+      if (currentView==='TOP20') {
+        title = n>20
+          ? `Market scan complete — ${n} active signals — displaying top ${t} by composite rank score.`
+          : `Market scan complete — ${n} active signals — all visible (≤20, no compression needed).`;
+        sub = n>20
+          ? 'Remaining signal and no-signal stocks appear below the highlighted Top 20 block.'
+          : 'Phase 2 rule: Top 20 mode only compresses when more than 20 signals are present.';
+      } else if (currentView==='SIGNALS') {
+        title = `Showing all ${n} filtered active signals sorted by composite rank score.`;
+        sub = 'No-signal rows are hidden in this mode.';
+      } else {
+        title = `Showing all ${visibleRows.length} filtered stocks including no-signal rows.`;
+        sub = 'Signals remain ranked; no-signal entries are preserved.';
+      }
+      document.getElementById('filterBannerTitle').textContent = title;
+      document.getElementById('filterBannerSub').textContent = sub;
+    }
+
+    function bindRowNavigation() {
+      document.querySelectorAll('.clickable-row').forEach(row => {
+        row.addEventListener('click', e => {
+          if (e.target.tagName.toLowerCase()==='a'||e.target.closest('a')) return;
+          const url = row.getAttribute('data-url');
+          if (url) window.location.href = url;
+        });
+      });
+    }
+
+    function renderIndexPanel(stocks) {
+      const indices = stocks.filter(s => normalizeText(s.instrument_group).toUpperCase()==='INDEX');
+      document.getElementById('indexCount').textContent = `${indices.length} indices`;
+      if (!indices.length) {
+        document.getElementById('indexBody').innerHTML =
+          '<tr><td colspan="7" class="empty">No index data — run update_universe.py first.</td></tr>';
+        return;
+      }
+      const priority = ['^NSEI','NSEI','^NSEBANK','NSEBANK','^CNXIT','^CNXFIN','^NSMIDCP','^CNXSC'];
+      indices.sort((a,b) => {
+        const ai=priority.indexOf(a.symbol), bi=priority.indexOf(b.symbol);
+        if (ai>-1&&bi>-1) return ai-bi;
+        if (ai>-1) return -1; if (bi>-1) return 1;
+        return a.symbol.localeCompare(b.symbol);
+      });
+      document.getElementById('indexBody').innerHTML = indices.map(stock => {
+        const url = safeDashboardUrl(stock);
+        const rowAttrs = url ? `class="clickable-row" data-url="${escapeHtml(url)}"` : '';
+        const symCell  = url
+          ? `<a class="symbol-link" href="${escapeHtml(url)}">${escapeHtml(stock.symbol||'NA')}</a>`
+          : `<span class="symbol-link">${escapeHtml(stock.symbol||'NA')}</span>`;
+        const evt = normalizeText(stock.structure_event)||'NA';
+        const evtC = evt==='CHOCH'?'#fb923c':evt==='BOS'?'#60a5fa':'var(--muted)';
+        return `<tr ${rowAttrs}>
+          <td>${symCell}<div class="faint" style="font-size:11px">${escapeHtml(stock.company_name||'')}</div></td>
+          <td style="color:${trendColor(stock.trend)};font-weight:800">${escapeHtml(stock.trend||'NA')}</td>
+          <td style="font-weight:700;color:${evtC}">${escapeHtml(evt)}</td>
+          <td>${getSignalBadge(stock.top_signal)}</td>
+          <td>${getSignalBadge(stock.bottom_signal)}</td>
+          <td class="mono">${formatPrice(stock.current_price)}</td>
+          <td class="mono faint">${escapeHtml(stock.last_updated||stock.scan_date||'NA')}</td>
+        </tr>`;
+      }).join('');
+      bindRowNavigation();
+    }
+
+    function initEnrichedFilters(stocks) {
+      const sectors = [...new Set(
+        stocks.map(s=>normalizeText(s.sector)).filter(v=>v&&v!=='NA')
+      )].sort();
+      const indices = [...new Set(
+        stocks.flatMap(s=>Array.isArray(s.index_memberships)?s.index_memberships:[])
+      )].sort();
+      populateDropdown('sectorFilter', sectors);
+      populateDropdown('indexFilter', indices);
+    }
+
+    function setActiveView(view) {
+      currentView = view;
+      document.querySelectorAll('.segmented button').forEach(b => b.classList.toggle('active', b.dataset.view===view));
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const base = getBaseFilteredStocks(allStocks);
+      const { rows, activeSignals, top20 } = getViewRows(base);
+      const highRows = getHighSignals(base);
+      const lowRows  = getLowSignals(base);
+      renderBoard('highBoardBody','highBoardCount', highRows, 'high');
+      renderBoard('lowBoardBody', 'lowBoardCount',  lowRows,  'low');
+      renderMainTable(rows, new Set(top20.map(s=>s.symbol+'|'+normalizeText(s.last_signal_time))));
+      updateSummary(rows, activeSignals, top20);
+      bindRowNavigation();
+    }
+
+    // updateBarLabels — updates bar button tooltips and legend
+    // to say "hours ago" in 1H mode and "days ago" in 1D mode
+    function updateBarLabels(unit) {
+      const isHour = unit === 'hour';
+      document.querySelectorAll('.bar-btn[data-bar]').forEach(btn => {
+        const bar = btn.getAttribute('data-bar');
+        if (bar === 'ALL') { btn.title = 'Show all bars'; return; }
+        const n = parseInt(bar, 10);
+        if (n === 0) {
+          btn.title = isHour
+            ? 'BAR 0 = signal appeared in the most recent 1H candle'
+            : 'BAR 0 = signal appeared today (most recent daily candle)';
+        } else {
+          btn.title = `BAR ${n} = signal appeared ${n} ${isHour ? 'hour' : 'day'}${n===1?'':'s'} ago`;
+        }
+      });
+      const legend = document.getElementById('barLegend');
+      if (legend && legend.textContent.startsWith('Showing all bars')) {
+        legend.textContent = `Showing all bars — click a number to filter (unit: ${isHour ? 'hours' : 'days'})`;
+      }
+      // Update timeframe legend text
+      const tfLegend = document.getElementById('timeframeLegend');
+      if (tfLegend && !tfLegend.textContent.startsWith('⚠') && !tfLegend.textContent.startsWith('Loading')) {
+        tfLegend.textContent = isHour
+          ? 'Showing hourly structure signals — bars = hours ago.'
+          : 'Showing daily structure signals — bars = days ago.';
+      }
+    }
+
+    // setTimeframe — called when user toggles 1D / 1H
+    function setTimeframe(tf) {
+      SCAN_TIMEFRAME = tf;
+      const url = APP_CONFIG.urls[tf];
+
+      // Update the scanTimeframe dropdown if it exists
+      const sel = document.getElementById('scanTimeframe');
+      if (sel) sel.value = tf;
+
+      // Show loading state
+      ['highBoardBody','lowBoardBody','allStocksBody'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = `<tr><td colspan="21" class="empty">Loading ${tf} data…</td></tr>`;
+      });
+
+      loadStocks(url);
+    }
+
+    async function loadStocks(url) {
+      url = url || APP_CONFIG.urls[SCAN_TIMEFRAME];
+      try {
+        const res  = await fetch(url, { cache:'no-store' });
+        if (!res.ok) throw new Error(
+          `HTTP ${res.status}${SCAN_TIMEFRAME==='1H' ? ' — stocks_1h.json not found, run scan_market_structure_combined.py first' : ''}`
+        );
+        const data = await res.json();
+        allStocks  = (Array.isArray(data)?data:[]).map(normalizeRecord);
+        document.getElementById('heroDataSource').textContent =
+          `Data source: ${SCAN_TIMEFRAME==='1H'?'stocks_1h.json':'stocks.json'} · ${allStocks.length} stocks`;
+
+        // Warnings
+        const scanned     = allStocks.filter(s => s.scan_date && s.scan_date !== 'NA').length;
+        const notEnriched = allStocks.filter(s => !s.sector || s.sector === 'NA').length;
+        const warnings = [];
+        if (scanned === 0 && SCAN_TIMEFRAME === '1D')
+          warnings.push('⚠ Scanner not run — run scan_market_structure_combined.py --timeframes 1d first.');
+        if (scanned === 0 && SCAN_TIMEFRAME === '1H')
+          warnings.push('⚠ 1H scanner not run — run scan_market_structure_combined.py --timeframes 1h first.');
+        if (notEnriched > allStocks.length * 0.5)
+          warnings.push('⚠ Many stocks not enriched — run enrich_stocks.py first.');
+        const warnEl = document.getElementById('scanWarning');
+        if (warnEl) {
+          if (warnings.length) { warnEl.textContent = warnings.join('  '); warnEl.style.display='block'; }
+          else warnEl.style.display = 'none';
+        }
+
+        updateBarLabels(SCAN_TIMEFRAME === '1H' ? 'hour' : 'day');
+        initEnrichedFilters(allStocks);
+        renderIndexPanel(allStocks);
+        applyFilters();
+      } catch(err) {
+        document.getElementById('heroDataSource').textContent = 'Data source: FAILED';
+        ['indexBody','highBoardBody','lowBoardBody'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = `<tr><td colspan="9" class="empty">Failed to load ${SCAN_TIMEFRAME} data: ${escapeHtml(err.message)}</td></tr>`;
+        });
+        document.getElementById('allStocksBody').innerHTML =
+          `<tr><td colspan="21" class="empty">Failed to load ${SCAN_TIMEFRAME} data: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    document.getElementById('viewTop20').addEventListener('click', ()=>setActiveView('TOP20'));
+    document.getElementById('viewSignals').addEventListener('click',()=>setActiveView('SIGNALS'));
+    document.getElementById('viewAll').addEventListener('click',  ()=>setActiveView('ALL'));
+
+    // Date + search inputs only (all others are multi-select panels)
+    ['searchInput','fromDate','toDate'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener(id==='searchInput'?'input':'change', applyFilters);
+    });
+
+    // Initialise ALL multi-select panels
+    ['capFilter','sectorFilter','indexFilter','instrumentFilter',
+     'latestBars','highSignalType','lowSignalType','signalQuickFilter','equityOnly'
+    ].forEach(id => msInitPanel(id));
+
+    // Timeframe toggle — scanTimeframe select OR setTimeframe() buttons
+    const tfSel = document.getElementById('scanTimeframe');
+    if (tfSel) {
+      tfSel.addEventListener('change', e => setTimeframe(e.target.value));
+    }
+
+    loadStocks();
+  </script>
+</body>
+</html>
