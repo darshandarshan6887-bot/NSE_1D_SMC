@@ -1,0 +1,4 @@
+# NSE trading holidays, one date per line as YYYY-MM-DD ('#' starts a comment).
+# Optional. Weekends are always skipped. A weekday listed here is treated as a non-trading day, so the
+# scheduler does not expect a new candle on it. Copy the dates from the official NSE holiday list, e.g.:
+# 2026-01-26   # Republic Day

@@ -1,245 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Stock</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background:#08111f; color:#e2e8f0; padding:20px; }
-  .container { max-width:1100px; margin:auto; background:#0f1a2e; padding:28px; border-radius:14px; box-shadow:0 0 24px rgba(0,0,0,.5); }
-  h1 { color:#4ade80; font-size:1.6rem; margin-bottom:2px; }
-  .sub { color:#94a3b8; font-size:13px; margin-bottom:4px; }
-  a.back { color:#93c5fd; text-decoration:none; font-size:13px; } a.back:hover { text-decoration:underline; }
-  .tabs { display:flex; gap:8px; margin:18px 0 4px; }
-  .tab { background:#0a1628; color:#94a3b8; border:1px solid #1e2d45; padding:8px 18px; border-radius:8px; cursor:pointer; font-weight:700; font-size:13px; }
-  .tab.active { background:#1e3a5f; color:#fff; border-color:#2563eb; }
-  .section-title { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#64748b; margin:24px 0 10px; padding-bottom:6px; border-bottom:1px solid #1e293b; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
-  .card { background:#0a1628; border:1px solid #1e2d45; border-radius:10px; padding:14px 16px; }
-  .card.hl { border-color:#334155; background:#0d1f38; }
-  .card.tv { background:#0d1f38; border:1px solid #2563eb44; border-left:3px solid #2563eb; }
-  .label { font-size:11px; color:#64748b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em; }
-  .value { font-size:16px; font-weight:600; color:#f1f5f9; word-break:break-word; }
-  .value.bullish { color:#4ade80; } .value.bearish { color:#f87171; } .value.strong { color:#facc15; }
-  .value.weak { color:#94a3b8; } .value.choch { color:#fb923c; } .value.bos { color:#60a5fa; }
-  .banner { margin:14px 0 0; padding:10px 14px; border-radius:8px; font-size:13px; display:none; }
-  .banner.warn { background:#3b2f0b; color:#facc15; } .banner.err { background:#3b1414; color:#f87171; }
-  .tv-link { display:inline-block; margin-top:22px; padding:11px 20px; background:#22c55e; color:#08111f; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px; }
-  .tv-link:hover { background:#16a34a; }
-  .idx { display:flex; flex-wrap:wrap; gap:6px; }
-  .pill { background:#1e293b; color:#cbd5e1; border-radius:999px; padding:3px 10px; font-size:12px; }
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stock detail · Pattern Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
 </head>
 <body>
-<div class="container">
-  <h1 id="title">Loading…</h1>
-  <div class="sub" id="subtitle"></div>
-  <a class="back" id="back" href="../main-dashboard/index.html">← Back to Main Dashboard</a>
-
-  <div class="banner err" id="errorBox"></div>
-  <div class="banner warn" id="warnBox"></div>
-
-  <div class="tabs">
-    <button class="tab active" data-tf="1D">Daily (1D)</button>
-    <button class="tab" data-tf="1H">Hourly (1H)</button>
+<div class="banner err hidden" id="errBanner"></div>
+<div class="wrap">
+<a class="back" href="../main-dashboard/index.html">← Back to scanner</a>
+<header class="top">
+  <div><h1 id="title">Loading…</h1><p id="subtitle"></p></div>
+  <div class="refresh"><div>Last refresh <strong id="refreshIST"></strong></div><div id="refreshSub"></div>
+    <span id="tfSwitch" style="display:inline-flex;gap:4px;margin-right:8px"><button class="theme-btn" type="button" data-tf="1d">1D</button><button class="theme-btn" type="button" data-tf="1h">1H</button></span><button class="theme-btn" id="themeBtn" type="button">Switch theme</button></div>
+</header>
+<div id="content" class="hidden">
+  <section class="stats" id="stats"></section>
+  <section class="panel" style="margin-bottom:14px"><h2>Last 40 hourly candles</h2><div class="chartbox" id="chart"></div>
+    <p class="muted small" style="margin:6px 0 0">▲ bullish and ▼ bearish markers sit under or over the last candle of each signal. Dashed lines are the stop references of the three most recent directional signals.</p></section>
+  <div class="cols2">
+    <section class="panel"><h2>SMC market structure</h2><dl class="kv" id="smc"></dl></section>
+    <section class="panel"><h2>Readings</h2><dl class="kv" id="ctx"></dl></section>
+    <section class="panel"><h2>Why the top score</h2><div id="why"></div></section>
   </div>
-
-  <div class="section-title">Market Structure <span id="tfLabel"></span></div>
-  <div class="grid">
-    <div class="card hl"><div class="label">Trend</div><div class="value" data-f="trend"></div></div>
-    <div class="card hl"><div class="label">Signal</div><div class="value" data-f="signal"></div></div>
-    <div class="card"><div class="label">Structure Event</div><div class="value" data-f="structure_event"></div></div>
-    <div class="card"><div class="label">Last Structure Bar</div><div class="value" data-f="last_structure_time"></div></div>
-    <div class="card"><div class="label">Price (close of last bar)</div><div class="value" data-f="current_price" data-prefix="₹"></div></div>
-    <div class="card"><div class="label">Last Bar</div><div class="value" data-f="scan_date"></div></div>
-  </div>
-
-  <div class="section-title">Strong / Weak High</div>
-  <div class="grid">
-    <div class="card tv"><div class="label">Top Signal</div><div class="value" data-f="top_signal"></div></div>
-    <div class="card tv"><div class="label">Label Bar</div><div class="value" data-f="top_signal_time"></div></div>
-    <div class="card tv"><div class="label">Label Price</div><div class="value" data-f="top_signal_price"></div></div>
-    <div class="card tv"><div class="label">Bars From Latest</div><div class="value" data-f="top_bars_since" data-suffix=" bars ago"></div></div>
-    <div class="card"><div class="label">Latest Swing High Pivot Bar</div><div class="value" data-f="top_pivot_time"></div></div>
-    <div class="card"><div class="label">Swing High Level</div><div class="value" data-f="last_swing_high"></div></div>
-    <div class="card"><div class="label">Unbroken Swing High</div><div class="value" data-f="active_swing_high"></div></div>
-  </div>
-
-  <div class="section-title">Strong / Weak Low</div>
-  <div class="grid">
-    <div class="card tv"><div class="label">Bottom Signal</div><div class="value" data-f="bottom_signal"></div></div>
-    <div class="card tv"><div class="label">Label Bar</div><div class="value" data-f="bottom_signal_time"></div></div>
-    <div class="card tv"><div class="label">Label Price</div><div class="value" data-f="bottom_signal_price"></div></div>
-    <div class="card tv"><div class="label">Bars From Latest</div><div class="value" data-f="bottom_bars_since" data-suffix=" bars ago"></div></div>
-    <div class="card"><div class="label">Latest Swing Low Pivot Bar</div><div class="value" data-f="bottom_pivot_time"></div></div>
-    <div class="card"><div class="label">Swing Low Level</div><div class="value" data-f="last_swing_low"></div></div>
-    <div class="card"><div class="label">Unbroken Swing Low</div><div class="value" data-f="active_swing_low"></div></div>
-  </div>
-
-  <div class="section-title">Ranking</div>
-  <div class="grid">
-    <div class="card"><div class="label">Signal Rank Score</div><div class="value" data-f="signal_rank_score"></div></div>
-    <div class="card"><div class="label">Bullish Rank Score</div><div class="value" data-f="bullish_rank_score"></div></div>
-    <div class="card"><div class="label">Bearish Rank Score</div><div class="value" data-f="bearish_rank_score"></div></div>
-    <div class="card"><div class="label">Bars Since Signal</div><div class="value" data-f="bars_since_signal" data-suffix=" bars"></div></div>
-    <div class="card"><div class="label">Signal Strength</div><div class="value" data-f="signal_strength"></div></div>
-    <div class="card"><div class="label">Scanner Status</div><div class="value" data-f="scanner_status"></div></div>
-    <div class="card"><div class="label">Last Scanned</div><div class="value" data-f="scanned_at"></div></div>
-  </div>
-
-  <div class="section-title">Company</div>
-  <div class="grid">
-    <div class="card"><div class="label">Group / Series</div><div class="value" id="grp"></div></div>
-    <div class="card"><div class="label">Sector</div><div class="value" id="sector"></div></div>
-    <div class="card"><div class="label">Industry</div><div class="value" id="industry"></div></div>
-    <div class="card"><div class="label">Market Cap</div><div class="value" id="mcap"></div></div>
-    <div class="card"><div class="label">Cap Class</div><div class="value" id="cap"></div></div>
-    <div class="card"><div class="label">P/E</div><div class="value" id="pe"></div></div>
-    <div class="card"><div class="label">52-Week Range</div><div class="value" id="w52"></div></div>
-    <div class="card"><div class="label">Avg Volume</div><div class="value" id="vol"></div></div>
-  </div>
-  <div class="section-title">Index Membership</div>
-  <div class="idx" id="indices"></div>
-
-  <a class="tv-link" id="tvLink" href="#" target="_blank" rel="noopener noreferrer">Open in TradingView ↗</a>
+  <section class="card" id="lvlCard"><div style="padding:14px 16px 4px"><b>Support &amp; resistance levels</b> <span class="muted small" id="lvlMeta"></span></div><div class="scroll"><table class="sig-table" style="min-width:760px"><thead><tr><th>Role</th><th class="num">Level</th><th>Grade</th><th class="num">Score</th><th class="num">Visits / candles</th><th class="num">Hold rate</th><th class="num">From price</th><th>Notes</th></tr></thead><tbody id="lvls"></tbody></table></div></section>
+  <section class="card"><div style="padding:14px 16px 4px"><b>All signals, last <span id="storeBars">35</span> candles</b></div><div class="scroll"><table class="sig-table" style="min-width:760px"><thead><tr><th>Signal</th><th>Group</th><th>Direction</th><th>Formed (candle start)</th><th class="num">Ago</th><th class="num">Stop ref.</th><th>Confirmation</th><th class="num">Score</th></tr></thead><tbody id="sigs"></tbody></table></div></section>
+  <p class="muted small" id="notes"></p>
 </div>
-
+</div>
+<script src="../assets/common.js"></script>
 <script>
-(function () {
-  const params = new URLSearchParams(location.search);
-  const SYMBOL = (params.get('symbol') || '').trim().toUpperCase();
-  let tf = (params.get('tf') || '1D').toUpperCase() === '1H' ? '1H' : '1D';
+const $ = s => document.querySelector(s);
+const q = new URLSearchParams(location.search).get('symbol');
 
-  // Same two-file pattern as main-dashboard/index.html: stocks.json holds the
-  // plain-named daily fields, stocks_1h.json is the server-derived plain-named
-  // hourly view (common.py's derive_1h_view). Both are fetched once, up front,
-  // so switching the 1D/1H tab is instant with no re-fetch and no client-side
-  // "_1h" suffix juggling — the record for each timeframe already has the
-  // fields under their plain names.
-  const URLS = { '1D': '../shared-data/stocks.json', '1H': '../shared-data/stocks_1h.json' };
-  const dataByTf = { '1D': null, '1H': null };   // this symbol's record, per timeframe
-  const fetchErrorByTf = { '1D': null, '1H': null };
-  let company = null; // symbol/company-level fields (same in both files)
+function chart(stock){
+  const cs = stock.candles || []; if (!cs.length) return '<p class="muted">No candles saved.</p>';
+  const W = 22, H = 260, padL = 54, padB = 36, n = cs.length, width = padL + n * W + 10;
+  const sigs = (stock.signals || []);
+  const stops = sigs.filter(g => g.stop != null).slice(0, 3);
+  let hi = Math.max(...cs.map(c => c[2])), lo = Math.min(...cs.map(c => c[3]));
+  stops.forEach(g => { hi = Math.max(hi, g.stop); lo = Math.min(lo, g.stop); });
+  const pad = (hi - lo) * 0.06 || 1; hi += pad; lo -= pad;
+  const y = v => 8 + (hi - v) / (hi - lo) * (H - 16);
+  let s = '<svg width="' + width + '" height="' + (H + padB) + '" viewBox="0 0 ' + width + ' ' + (H + padB) + '" role="img" aria-label="Candle chart">';
+  for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, yy = y(v); s += '<line x1="' + padL + '" x2="' + width + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--line)"/><text x="' + (padL - 6) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)">' + v.toFixed(v >= 100 ? 1 : 2) + '</text>'; }
+  cs.forEach((c, i) => {
+    const x = padL + i * W + W / 2, col = c[4] >= c[1] ? 'var(--bull)' : 'var(--bear)';
+    s += '<line x1="' + x + '" x2="' + x + '" y1="' + y(c[2]) + '" y2="' + y(c[3]) + '" stroke="' + col + '"/>';
+    s += '<rect x="' + (x - 6) + '" y="' + y(Math.max(c[1], c[4])) + '" width="12" height="' + Math.max(1.5, Math.abs(y(c[1]) - y(c[4]))) + '" fill="' + col + '"/>';
+    if (c[0].endsWith('09:15') || i === 0) { const d = c[0].slice(5, 10); s += '<line x1="' + (x - W/2) + '" x2="' + (x - W/2) + '" y1="8" y2="' + H + '" stroke="var(--line)" stroke-dasharray="2 4"/><text x="' + (x - W/2 + 2) + '" y="' + (H + 14) + '" font-size="10" fill="var(--muted)">' + d + '</text>'; }
+  });
+  stops.forEach(g => { s += '<line x1="' + padL + '" x2="' + width + '" y1="' + y(g.stop) + '" y2="' + y(g.stop) + '" stroke="var(--' + colorVar(g.dir) + ')" stroke-dasharray="5 4" opacity=".7"/>'; });
+  const seen = {};
+  sigs.forEach(g => {
+    if (g.dir === 'neutral') return;
+    const i = n - 1 - g.since; if (i < 0) return;
+    const k = i + g.dir; if (seen[k]) return; seen[k] = 1;
+    const x = padL + i * W + W / 2, c = cs[i];
+    if (g.dir === 'bull') s += '<text x="' + x + '" y="' + (y(c[3]) + 15) + '" text-anchor="middle" font-size="12" fill="var(--bull)"><title>' + esc(g.name) + '</title>▲</text>';
+    else s += '<text x="' + x + '" y="' + (y(c[2]) - 5) + '" text-anchor="middle" font-size="12" fill="var(--bear)"><title>' + esc(g.name) + '</title>▼</text>';
+  });
+  return s + '</svg>';
+}
+function kv(pairs){ return pairs.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>').join(''); }
+const yn = v => v ? 'yes' : 'no';
 
-  const NA = new Set([undefined, null, '', 'NA']);
-  const fmt = (x, fb = '—') => NA.has(x) ? fb : String(x);
-  const $ = (s) => document.querySelector(s);
-
-  function colorClass(el, val) {
-    el.classList.remove('bullish', 'bearish', 'strong', 'weak', 'choch', 'bos');
-    const s = String(val || '').toUpperCase();
-    if (s.includes('BULLISH') || s === 'STRONG_LOW') el.classList.add('bullish');
-    else if (s.includes('BEARISH') || s === 'STRONG_HIGH') el.classList.add('bearish');
-    else if (s.includes('WEAK')) el.classList.add('weak');
-    else if (s === 'CHOCH') el.classList.add('choch');
-    else if (s === 'BOS') el.classList.add('bos');
-    else if (s === 'STRONG') el.classList.add('strong');
-  }
-
-  function render() {
-    const stock = dataByTf[tf];
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tf === tf));
-    $('#tfLabel').textContent = '— ' + (tf === '1H' ? 'hourly bars' : 'daily bars');
-
-    const err = $('#errorBox'), warn = $('#warnBox');
-    if (!stock) {
-      err.textContent = fetchErrorByTf[tf] ||
-        (tf === '1H'
-          ? 'No 1H data for this symbol yet — run scan_market_structure_combined.py --timeframes 1h.'
-          : 'No 1D data for this symbol yet — run scan_market_structure_combined.py --timeframes 1d.');
-      err.style.display = 'block';
-      warn.style.display = 'none';
-      document.querySelectorAll('[data-f]').forEach(el => { el.textContent = '—'; colorClass(el, ''); });
-      return;
-    }
-    err.style.display = 'none';
-
-    document.querySelectorAll('[data-f]').forEach(el => {
-      const key = el.dataset.f;
-      let raw = stock[key];
-      if (key === 'scanned_at') raw = stock.scanned_at ?? stock.last_updated;
-      const numeric = ['top_bars_since', 'bottom_bars_since', 'bars_since_signal'].includes(key);
-      let txt;
-      if (numeric) txt = (typeof raw === 'number' && raw >= 0) ? raw + (el.dataset.suffix || '') : '—';
-      else txt = NA.has(raw) ? '—' : (el.dataset.prefix || '') + String(raw);
-      el.textContent = txt;
-      colorClass(el, raw);
-    });
-
-    const status = stock.scanner_status;
-    const scanErr = stock.scan_error;
-    if (status === 'STALE') { warn.textContent = 'Last download failed' + (scanErr ? ' (' + scanErr + ')' : '') + ' — showing the previous scan result.'; warn.style.display = 'block'; }
-    else if (status && status !== 'OK') { warn.textContent = 'Scanner status: ' + status + (scanErr ? ' — ' + scanErr : ''); warn.style.display = 'block'; }
-    else warn.style.display = 'none';
-  }
-
-  function fillCompany(s) {
-    $('#grp').textContent = fmt(s.instrument_group) + ' / ' + fmt(s.series);
-    $('#sector').textContent = fmt(s.sector);
-    $('#industry').textContent = fmt(s.industry);
-    $('#mcap').textContent = s.market_cap_cr != null ? '₹' + Number(s.market_cap_cr).toLocaleString('en-IN') + ' Cr' : '—';
-    $('#cap').textContent = fmt(s.cap_category);
-    $('#pe').textContent = s.pe_ratio != null ? Number(s.pe_ratio).toFixed(1) : '—';
-    $('#w52').textContent = (s.week52_low != null && s.week52_high != null) ? s.week52_low + ' – ' + s.week52_high : '—';
-    $('#vol').textContent = s.avg_volume != null ? Number(s.avg_volume).toLocaleString('en-IN') : '—';
-    const box = $('#indices'); box.textContent = '';
-    (Array.isArray(s.index_memberships) ? s.index_memberships : []).forEach(n => {
-      const p = document.createElement('span'); p.className = 'pill'; p.textContent = n; box.appendChild(p);
-    });
-    if (!box.children.length) box.textContent = '—';
-    const tv = String(s.tradingview_url || '');
-    $('#tvLink').href = tv.startsWith('https://www.tradingview.com/') ? tv : '#';
-  }
-
-  async function fetchTf(t) {
-    try {
-      const res = await fetch(URLS[t], { cache: 'no-cache' });
-      if (!res.ok) {
-        fetchErrorByTf[t] = `Could not load ${URLS[t]} (HTTP ${res.status})` +
-          (t === '1H' ? ' — stocks_1h.json not found, run scan_market_structure_combined.py first' : '') +
-          '. Serve the folder with start_dashboard.bat instead of opening the file directly.';
-        return;
-      }
-      const all = await res.json();
-      dataByTf[t] = (Array.isArray(all) ? all : []).find(x => String(x.symbol).toUpperCase() === SYMBOL) || null;
-      if (!dataByTf[t]) fetchErrorByTf[t] = `${SYMBOL} not found in ${URLS[t].split('/').pop()}`;
-      else if (!company) company = dataByTf[t];   // symbol/company fields are identical across both files
-    } catch (e) {
-      fetchErrorByTf[t] = e.message;
-    }
-  }
-
-  async function load() {
-    const err = $('#errorBox');
-    if (!SYMBOL) {
-      $('#title').textContent = 'Stock';
-      err.textContent = 'No symbol given. Open this page from the main dashboard (…/stock/index.html?symbol=TCS).';
-      err.style.display = 'block';
-      return;
-    }
-    await Promise.all([fetchTf('1D'), fetchTf('1H')]);
-    if (!company) {
-      $('#title').textContent = SYMBOL;
-      err.textContent = fetchErrorByTf['1D'] || fetchErrorByTf['1H'] || (SYMBOL + ' not found.');
-      err.style.display = 'block';
-      return;
-    }
-    document.title = SYMBOL + ' — SMC Dashboard';
-    $('#title').textContent = SYMBOL;
-    $('#subtitle').textContent = fmt(company.company_name, '');
-    fillCompany(company);
-    render();
-  }
-
-  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
-    tf = b.dataset.tf;
-    const u = new URL(location.href); u.searchParams.set('tf', tf); history.replaceState(null, '', u);
-    if (company) render();
-  }));
-  $('#back').href = '../main-dashboard/index.html';
-  load();
-})();
+async function init(){
+  bindTheme($('#themeBtn'));
+  let data;
+  try { data = await loadData(); } catch (e) { const b = $('#errBanner'); b.textContent = 'Could not load stocks.json (' + e.message + ').'; b.classList.remove('hidden'); $('#title').textContent = 'Unavailable'; return; }
+  const meta = data.meta || {};
+  $('#refreshIST').textContent = meta.generated_ist || ''; $('#refreshSub').textContent = meta.generated_et || '';
+  $('#storeBars').textContent = meta.store_bars || 35;
+  const s = data.stocks.find(x => x.symbol.toUpperCase() === (q || '').toUpperCase());
+  if (!s) { $('#title').textContent = q ? 'Symbol “' + q + '” is not in your list' : 'No symbol given'; $('#subtitle').textContent = 'Add ?symbol=TCS to the address, or open a symbol from the scanner.'; return; }
+  await mergeDetail(s);
+  if (NSE_TF !== '1h') { const lc = $('#lvlCard'); if (lc) lc.style.display = 'none'; }
+  document.querySelectorAll('#tfSwitch button').forEach(b => { b.style.opacity = b.dataset.tf === NSE_TF ? '1' : '.55'; b.addEventListener('click', () => setTf(b.dataset.tf)); });
+  document.title = s.symbol + ' · NSE Pattern Scanner';
+  $('#title').textContent = s.symbol + ' · ' + s.name;
+  $('#subtitle').textContent = s.type + ' · Yahoo: ' + s.yahoo_symbol + ' · status ' + s.scanner_status + (s.scan_error ? ' (' + s.scan_error + ')' : '');
+  if (!isLive(s)) { $('#subtitle').textContent += s.notes ? ' · ' + s.notes : ''; return; }
+  $('#content').classList.remove('hidden');
+  const c = s.context || {}, m = s.smc || {}, sigs = (s.signals || []).slice().sort((a, b) => a.since - b.since || b.score - a.score);
+  const top = sigs.slice().sort((a, b) => b.score - a.score)[0], chg = s.change_pct;
+  $('#stats').innerHTML =
+    '<div class="stat"><b>₹' + money(s.price) + '</b><span>last close ' + esc(fmtTime(s.last_bar_time)) + ' ' + esc(tzShort(s.tz)) + '</span></div>' +
+    '<div class="stat ' + (chg >= 0 ? 'bull' : 'bear') + '"><b>' + (chg == null ? '–' : (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') + '</b><span>vs previous session close</span></div>' +
+    '<div class="stat bull"><b>' + ((s.scores || {}).bull || 0) + '</b><span>best bullish score</span></div>' +
+    '<div class="stat bear"><b>' + ((s.scores || {}).bear || 0) + '</b><span>best bearish score</span></div>' +
+    '<div class="stat"><b>' + sigs.length + '</b><span>signals in last ' + (meta.store_bars || 35) + ' candles</span></div>';
+  $('#chart').innerHTML = chart(s);
+  const sigName = v => ({STRONG_HIGH:'Strong High', WEAK_HIGH:'Weak High', STRONG_LOW:'Strong Low', WEAK_LOW:'Weak Low'})[v] || 'none';
+  const lvl = (sig, price, time, since) => sig && sig !== 'NO_SIGNAL' ? '<b>' + sigName(sig) + '</b> at ₹' + money(price) + (since != null && since >= 0 ? ', set ' + agoText(since) : '') + (time ? ' (' + esc(fmtTime(time)) + ')' : '') : 'none';
+  $('#smc').innerHTML = kv([
+    ['Trend', '<span class="pill ' + (m.trend === 'BULLISH' ? 'bull' : m.trend === 'BEARISH' ? 'bear' : 'none') + '">' + esc(m.trend || 'UNKNOWN') + '</span>'],
+    ['Last structure event', esc(m.structure_event === 'CHOCH' ? 'CHoCH' : (m.structure_event || 'none')) + (m.structure_bars_since >= 0 ? ', ' + agoText(m.structure_bars_since) : '') + (m.last_structure_time ? ' (' + esc(fmtTime(m.last_structure_time)) + ')' : '')],
+    ['High signal (downward)', lvl(m.top_signal, m.top_signal_price, m.top_signal_time, m.top_bars_since)],
+    ['High rank score', m.bearish_rank_score != null ? Number(m.bearish_rank_score).toFixed(1) : '–'],
+    ['Low signal (upward)', lvl(m.bottom_signal, m.bottom_signal_price, m.bottom_signal_time, m.bottom_bars_since)],
+    ['Low rank score', m.bullish_rank_score != null ? Number(m.bullish_rank_score).toFixed(1) : '–'],
+    ['Active swing high', money(m.active_swing_high)], ['Active swing low', money(m.active_swing_low)]]);
+  $('#ctx').innerHTML = kv([
+    ['Squeeze', esc(c.squeeze_state || '–')], ['Bollinger squeeze', c.bb_squeeze ? yn(c.bb_squeeze.on) + (c.bb_squeeze.on ? ' (' + c.bb_squeeze.bars + ' candles)' : '') : '–'],
+    ['TTM squeeze', c.ttm_squeeze ? yn(c.ttm_squeeze.on) + (c.ttm_squeeze.momentum_dir ? ', momentum ' + esc(c.ttm_squeeze.momentum_dir) : '') : '–'],
+    ['ATR contraction', yn(c.atr_contraction)], ['Volatility contraction', yn(c.hv_contraction)], ['Volume dry-up', yn(c.volume_dry_up)],
+    ['Donchian squeeze', yn(c.donchian_squeeze)], ['MA ribbon squeeze', yn(c.ma_ribbon_squeeze)],
+    ['Relative volume', (c.rel_volume ?? '–') + 'x (vs same time slot)'], ['ADX', (c.adx ?? '–') + ' ' + esc(c.adx_state || '')], ['Choppiness', c.choppiness ?? '–'],
+    ['OBV / A-D', esc(c.obv_divergence || '–') + ' / ' + esc(c.ad_divergence || '–') + ' divergence'], ['CMF', (c.cmf ?? '–') + ' ' + esc(c.cmf_state || '')],
+    ['Price vs Ichimoku cloud', esc(c.ichimoku_cloud || '–')], ['ATR', (c.atr ?? '–') + ' (' + (c.atr_pct ?? '–') + '% of price)']]);
+  $('#why').innerHTML = top && top.parts ? '<p class="small" style="margin:0 0 6px"><b>' + esc(top.name) + '</b> · ' + dirLabel(top.dir) + ' · score ' + top.score + '</p>' +
+    PART_LABELS.map(([k, label, max], i) => '<div class="break"><span>' + label + '</span><div class="b"><i style="width:' + (top.parts[i] / max * 100) + '%"></i></div><span>' + top.parts[i] + '/' + max + '</span></div>').join('') : '<p class="muted">No signals to score.</p>';
+  const lvList = s.levels || [], lm = s.levels_meta || {};
+  $('#lvlMeta').textContent = lvList.length ? '(' + lvList.length + ' kept from ' + (lm.candidates || 0) + ' candidates, ' + (lm.bars || 0) + ' hourly candles analysed; grade A = better than ~95% of levels found in random prices; it is evidence, not a probability)' : '';
+  const lvRow = l => {
+    const notes = [].concat(l.flipped ? ['flipped' + (l.flip_ago != null ? ' ' + agoText(l.flip_ago) : '')] : [], l.fresh ? ['fresh'] : [], l.sweeps ? ['sweeps ' + l.sweeps] : [], l.breaks ? ['breaks ' + l.breaks] : [], (l.tags || []));
+    const dist = l.dist_atr == null ? '–' : (l.dist_atr > 0 ? '+' : '') + l.dist_atr + ' ATR';
+    return '<tr><td><span class="pill ' + (l.role === 'S' ? 'bull' : 'bear') + '">' + (l.role === 'S' ? 'Support' : 'Resistance') + '</span></td><td class="num"><b>₹' + money(l.price) + '</b></td><td>' + esc(l.grade) + '</td><td class="num">' + l.score + '</td><td class="num">' + l.visits + ' / ' + l.candles + '</td><td class="num">' + (l.hold == null ? '–' : l.hold + '%') + '</td><td class="num">' + dist + '</td><td class="muted small">' + esc(notes.join(', ')) + '</td></tr>';
+  };
+  const above = lvList.filter(l => l.price >= s.price), below = lvList.filter(l => l.price < s.price);
+  $('#lvls').innerHTML = lvList.length ? above.map(lvRow).join('') + '<tr><td colspan="8" class="muted small" style="text-align:center">— current price ₹' + money(s.price) + ' —</td></tr>' + below.map(lvRow).join('') : '<tr><td colspan="8" class="muted">No levels yet. They appear after the next scan.</td></tr>';
+  $('#sigs').innerHTML = sigs.map(g => {
+    const extra = g.zone ? ' <span class="muted small">gap ' + money(g.zone[0]) + ' to ' + money(g.zone[1]) + ', ' + esc(g.status) + '</span>' : g.price_vs_cloud ? ' <span class="muted small">price ' + esc(g.price_vs_cloud) + ' cloud</span>' : '';
+    const cf = g.confirm ? '<span class="pill ' + (g.confirm === 'confirmed' ? 'bull' : g.confirm === 'failed' ? 'bear' : 'none') + '">' + esc(g.confirm) + '</span>' : '<span class="muted">n/a</span>';
+    return '<tr><td>' + esc(g.name) + extra + '</td><td class="muted">' + esc(g.group) + '</td><td><span class="pill ' + g.dir + '">' + dirLabel(g.dir) + '</span></td><td>' + esc(fmtTime(g.time)) + '</td><td class="num">' + g.since + '</td><td class="num">' + (g.stop != null ? '₹' + money(g.stop) : '<span class="muted">n/a</span>') + '</td><td>' + cf + '</td><td class="num">' + g.score + '</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="muted">Nothing fired in this period.</td></tr>';
+  $('#notes').innerHTML = (s.notes ? 'Sector: ' + esc(s.notes) + ' · ' : '') + '<a href="' + esc(safeUrl(s.tradingview_url)) + '" target="_blank" rel="noopener">Open on TradingView</a>. Not financial advice.';
+}
+init();
 </script>
 </body>
 </html>

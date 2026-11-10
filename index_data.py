@@ -1057,7 +1057,7 @@ NIFTY_INFRA = frozenset({
     'ADANIPORTS',
     'BEL',
     'CONCOR',
-    'ENGINERSIN',
+    'ENGINEERSIN',
     'GAIL',
     'HAL',
     'IRCTC',

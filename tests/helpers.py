@@ -31,3 +31,22 @@ def seed_file(symbols, groups=None):
 
 def read():
     return json.loads(config.STOCKS_JSON.read_text(encoding="utf-8"))
+
+# ---- hourly NSE session calendar (used by the levels tests) ----
+SLOTS = [(9, 15), (10, 15), (11, 15), (12, 15), (13, 15), (14, 15), (15, 15)]
+
+
+def session_index(n: int, last: str = "2026-10-02 15:15") -> pd.DatetimeIndex:
+    """n NSE 1H candle start times (7 per weekday: 09:15 ... 15:15) ending at `last`."""
+    day = pd.Timestamp(last).normalize()
+    slot = SLOTS.index((pd.Timestamp(last).hour, pd.Timestamp(last).minute))
+    out = []
+    while len(out) < n:
+        out.append(day + pd.Timedelta(hours=SLOTS[slot][0], minutes=SLOTS[slot][1]))
+        slot -= 1
+        if slot < 0:
+            slot = 6
+            day -= pd.Timedelta(days=1)
+            while day.weekday() >= 5:
+                day -= pd.Timedelta(days=1)
+    return pd.DatetimeIndex(out[::-1])

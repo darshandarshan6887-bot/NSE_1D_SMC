@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+logs/
+shared-data/.*.lock
+shared-data/*.tmp
+shared-data/detail/*.tmp

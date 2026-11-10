@@ -1,11 +1,12 @@
 """Run the whole pipeline in order.  python master_sync_all.py [options]
 
-Steps (default): scan -> prices -> enrich -> validate
+Steps (default): scan -> prices -> enrich -> board -> validate
   scan      1D + 1H market structure (smart freshness rules)     scan_market_structure_combined.py
   prices    latest close for every symbol (also unscannable ones) refresh_all_prices.py
   enrich    sector / market cap / indices / cap class              enrich_stocks.py
+  board     dashboard extras (signals, candles, ATR per timeframe)   build_board.py
   universe  add new NSE listings (not in the default run)          update_universe.py
-  validate  sanity check                                            validate_data.py
+  validate  sanity check                                                validate_data.py
 
 A failing step does not stop the others (the old version aborted at the first failure). The exit
 code is 1 if any step failed, and a summary table is printed at the end.
@@ -32,9 +33,10 @@ STEPS = {
     "scan": "scan_market_structure_combined.py",
     "prices": "refresh_all_prices.py",
     "enrich": "enrich_stocks.py",
+    "board": "build_board.py",
     "validate": "validate_data.py",
 }
-DEFAULT = ["scan", "prices", "enrich", "validate"]
+DEFAULT = ["scan", "prices", "enrich", "board", "validate"]
 
 
 def main(argv=None) -> int:

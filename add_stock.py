@@ -29,7 +29,7 @@ def yahoo_ok(symbol: str) -> bool:
     try:
         h = yf.Ticker(f"{symbol}.NS").history(period="5d", auto_adjust=False, raise_errors=True)
         return h is not None and not h.empty
-    except Exception:                                             # noqa: BLE001
+    except Exception:                                           # noqa: BLE001
         return False
 
 

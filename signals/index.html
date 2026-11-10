@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signals - NSE scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="signals.css">
+</head>
+<body>
+<div class="topbar"><div class="wrap">
+  <span class="brand">NSE scanner</span>
+  <nav aria-label="Pages">
+    <a href="../index.html">Home</a>
+    <a href="index.html" aria-current="page">Signals</a>
+    <a href="../main-dashboard/index.html">Structure</a>
+  </nav>
+</div></div>
+
+<main class="wrap">
+  <div class="title">
+    <div>
+      <h1>Signals</h1>
+      <p class="lede">Candlestick patterns, squeezes, volume and trend events on NSE stocks, ranked by a score from 0 to 100.</p>
+    </div>
+    <div class="fresh" id="fresh" aria-live="polite"></div>
+  </div>
+
+  <div>
+    <div class="seg" id="tf" role="group" aria-label="Timeframe"></div>
+    <p class="tfnote" id="tfnote"></p>
+  </div>
+
+  <section class="boards" aria-label="Top setups">
+    <div class="board bull">
+      <header><h2>Top bullish setups</h2><span id="bullHint"></span></header>
+      <ol id="bull"></ol>
+    </div>
+    <div class="board bear">
+      <header><h2>Top bearish setups</h2><span id="bearHint"></span></header>
+      <ol id="bear"></ol>
+    </div>
+  </section>
+
+  <form class="toolbar" id="filters" onsubmit="return false" aria-label="Filters">
+    <label class="field">Search<input type="search" id="q" placeholder="Symbol, company or signal" autocomplete="off"></label>
+    <label class="field">Direction
+      <select id="dir"><option value="all">All</option><option value="bull">Bullish</option><option value="bear">Bearish</option><option value="neutral">Neutral</option></select>
+    </label>
+    <label class="field">Minimum score <span class="val" id="minv">40</span>
+      <input type="range" id="min" min="0" max="100" step="5" value="40">
+    </label>
+    <label class="field">Formed within<select id="within"></select></label>
+    <label class="field">Squeeze
+      <select id="squeeze"><option value="all">Any</option><option value="on">Squeeze on</option><option value="fired">Squeeze fired</option><option value="off">No squeeze</option></select>
+    </label>
+    <label class="field">Size<select id="cap"></select></label>
+    <label class="field">Sector<select id="sector"></select></label>
+    <button class="btn" type="button" id="reset">Reset filters</button>
+    <span class="count" id="count" aria-live="polite"></span>
+  </form>
+
+  <div class="tablewrap">
+    <table>
+      <caption class="muted" style="text-align:left;padding:10px 12px;caption-side:bottom">Select a row to see every signal, the score breakdown and the chart.</caption>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"><tr><td colspan="10" class="empty">Loading stocks...</td></tr></tbody>
+    </table>
+  </div>
+  <div class="more" id="more" hidden><button class="btn" type="button" id="moreBtn">Show 100 more</button></div>
+</main>
+
+<script src="signals.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SIG;
+  var $ = function (id) { return document.getElementById(id); };
+  var CAP = { LARGE_CAP: 'Large', MID_CAP: 'Mid', SMALL_CAP: 'Small' };
+  var state = { tf: S.tfFromUrl(), q: '', dir: 'all', min: 40, within: 0, squeeze: 'all', cap: 'all', sector: 'all',
+                sort: 'score', desc: true, limit: 100 };
+  var ALL = [];      // every record from stocks.json
+  var ROWS = [];     // rows of the current timeframe that have signal data
+
+  var COLS = [
+    { key: 'symbol', label: 'Stock', val: function (r) { return r.symbol; } },
+    { key: 'price', label: 'Price', num: true, val: function (r) { return r.price === null ? -1 : r.price; } },
+    { key: 'name', label: 'Best signal', val: function (r) { return r.name || ''; } },
+    { key: 'since', label: 'When', val: function (r) { return r.since === null ? 1e9 : r.since; } },
+    { key: 'score', label: 'Score', val: function (r) { return r.score; } },
+    { key: 'bulls', label: 'Bullish', num: true, val: function (r) { return r.bulls; } },
+    { key: 'bears', label: 'Bearish', num: true, val: function (r) { return r.bears; } },
+    { key: 'squeeze', label: 'Squeeze', val: function (r) { return r.squeeze || ''; } },
+    { key: 'trend', label: 'Structure', val: function (r) { return r.trend || ''; } },
+    { key: 'cap', label: 'Size', val: function (r) { return r.cap; } }
+  ];
+
+  function prep() {
+    var tf = state.tf;
+    ROWS = [];
+    ALL.forEach(function (rec) {
+      if (S.get(rec, 'signal_status', tf) !== 'OK') return;
+      var dir = S.get(rec, 'sig_best_dir', tf);
+      var name = S.get(rec, 'sig_best_name', tf);
+      var since = S.num(S.get(rec, 'sig_best_since', tf));
+      var bullName = S.get(rec, 'sig_bull_name', tf), bullSince = S.num(S.get(rec, 'sig_bull_since', tf));
+      var bearName = S.get(rec, 'sig_bear_name', tf), bearSince = S.num(S.get(rec, 'sig_bear_since', tf));
+      if (bullName === undefined && dir === 'bull') { bullName = name; bullSince = since; }   // data from an older scan
+      if (bearName === undefined && dir === 'bear') { bearName = name; bearSince = since; }
+      ROWS.push({
+        rec: rec, symbol: rec.symbol, company: rec.company_name || '', price: S.num(S.get(rec, 'current_price', tf)),
+        name: name || '', dir: dir || 'neutral', since: since, score: S.num(S.get(rec, 'sig_best_score', tf)) || 0,
+        bulls: S.num(S.get(rec, 'sig_bull_count', tf)) || 0, bears: S.num(S.get(rec, 'sig_bear_count', tf)) || 0,
+        bullScore: S.num(S.get(rec, 'sig_bull_score', tf)) || 0, bearScore: S.num(S.get(rec, 'sig_bear_score', tf)) || 0,
+        bullName: bullName || null, bullSince: bullSince === undefined ? null : bullSince,
+        bearName: bearName || null, bearSince: bearSince === undefined ? null : bearSince,
+        squeeze: S.get(rec, 'squeeze_state', tf), trend: S.get(rec, 'trend', tf) || '',
+        cap: CAP[rec.cap_category] || '\u2013', capRaw: rec.cap_category || '', sector: rec.sector && rec.sector !== 'NA' ? rec.sector : ''
+      });
+    });
+  }
+
+  function fillSelect(id, values, firstLabel, labelOf) {
+    var el = $(id), cur = el.value;
+    el.innerHTML = '<option value="all">' + firstLabel + '</option>' + values.map(function (v) {
+      return '<option value="' + S.esc(v) + '">' + S.esc(labelOf ? labelOf(v) : v) + '</option>';
+    }).join('');
+    el.value = values.indexOf(cur) >= 0 ? cur : 'all';
+  }
+  function fillFilters() {
+    var tf = S.TF[state.tf];
+    var w = $('within');
+    w.innerHTML = '<option value="0">Any time</option>' + tf.windows.map(function (n) {
+      return '<option value="' + n + '">Last ' + n + ' ' + (n === 1 ? tf.one : tf.many) + '</option>';
+    }).join('');
+    w.value = String(state.within);
+    if (w.value !== String(state.within)) { state.within = 0; w.value = '0'; }
+    var caps = {}, sectors = {};
+    ROWS.forEach(function (r) { if (r.capRaw) caps[r.capRaw] = 1; if (r.sector) sectors[r.sector] = 1; });
+    fillSelect('cap', Object.keys(caps).sort(), 'All sizes', function (v) { return CAP[v] || v; });
+    fillSelect('sector', Object.keys(sectors).sort(), 'All sectors');
+    state.cap = $('cap').value; state.sector = $('sector').value;
+  }
+
+  function board(id, hintId, side) {
+    var tf = S.TF[state.tf], win = tf.boardWindow;
+    var list = ROWS.filter(function (r) {
+      return r[side + 'Name'] && r[side + 'Since'] !== null && r[side + 'Since'] <= win && r[side + 'Score'] > 0;
+    }).sort(function (a, b) { return b[side + 'Score'] - a[side + 'Score'] || a[side + 'Since'] - b[side + 'Since']; }).slice(0, 10);
+    $(hintId).textContent = 'Formed within the last ' + win + ' ' + tf.many;
+    $(id).innerHTML = list.length ? list.map(function (r) {
+      return '<li><a href="detail.html?symbol=' + encodeURIComponent(r.symbol) + '&tf=' + state.tf + '">' +
+        '<span class="sym">' + S.esc(r.symbol) + '</span><span class="what">' + S.esc(r[side + 'Name']) + '</span>' +
+        '<span class="when">' + S.since(r[side + 'Since'], state.tf) + '</span><span class="score">' + r[side + 'Score'] + '</span></a></li>';
+    }).join('') : '<li class="empty">No ' + (side === 'bull' ? 'bullish' : 'bearish') + ' setups in this window.</li>';
+  }
+
+  function fresh() {
+    var tf = state.tf, latest = '', scan = '';
+    ALL.forEach(function (r) {
+      var b = S.get(r, 'last_bar_time', tf) || '', s = S.get(r, 'scanned_at', tf) || '';
+      if (b > latest) latest = b;
+      if (s > scan) scan = s;
+    });
+    $('fresh').innerHTML = latest
+      ? 'Latest candle <strong>' + S.esc(S.when(latest)) + '</strong><br>Last scan ' + S.esc(S.when(scan.slice(0, 16)))
+      : '';
+  }
+
+  function filtered() {
+    var q = state.q.trim().toLowerCase();
+    return ROWS.filter(function (r) {
+      if (r.score < state.min) return false;
+      if (state.dir !== 'all' && r.dir !== state.dir) return false;
+      if (state.within && (r.since === null || r.since > state.within)) return false;
+      if (state.squeeze !== 'all' && r.squeeze !== state.squeeze) return false;
+      if (state.cap !== 'all' && r.capRaw !== state.cap) return false;
+      if (state.sector !== 'all' && r.sector !== state.sector) return false;
+      if (q && (r.symbol + ' ' + r.company + ' ' + r.name).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+
+  function head() {
+    $('head').innerHTML = COLS.map(function (c) {
+      var sorted = state.sort === c.key;
+      return '<th scope="col" class="' + (c.num ? 'num' : '') + '"' + (sorted ? ' aria-sort="' + (state.desc ? 'descending' : 'ascending') + '"' : '') +
+        '><button type="button" data-sort="' + c.key + '">' + c.label + '</button></th>';
+    }).join('');
+  }
+
+  function render() {
+    var list = filtered();
+    var col = COLS.filter(function (c) { return c.key === state.sort; })[0] || COLS[4];
+    list.sort(function (a, b) {
+      var x = col.val(a), y = col.val(b);
+      var c = typeof x === 'string' ? x.localeCompare(y) : x - y;
+      if (c === 0) c = b.score - a.score || a.symbol.localeCompare(b.symbol);
+      return state.desc ? -c : c;
+    });
+    var shown = list.slice(0, state.limit);
+    $('count').textContent = list.length + ' of ' + ROWS.length + ' stocks with signals';
+    if (!ROWS.length) {
+      $('body').innerHTML = '<tr><td colspan="10" class="empty">No signal data for this timeframe yet. It appears after the first scan that includes signals has finished.</td></tr>';
+    } else if (!list.length) {
+      $('body').innerHTML = '<tr><td colspan="10" class="empty">No stocks match these filters. Lower the minimum score or reset the filters.</td></tr>';
+    } else {
+      $('body').innerHTML = shown.map(function (r) {
+        var href = 'detail.html?symbol=' + encodeURIComponent(r.symbol) + '&tf=' + state.tf;
+        var layers = S.num(S.get(r.rec, 'compression_layers', state.tf));
+        return '<tr data-href="' + href + '">' +
+          '<td><a class="sym" href="' + href + '">' + S.esc(r.symbol) + '</a><span class="co">' + S.esc(r.company) + '</span></td>' +
+          '<td class="num">' + S.price(r.price) + '</td>' +
+          '<td>' + (r.name ? S.esc(r.name) + S.pill(r.dir) : '<span class="muted">None</span>') + '</td>' +
+          '<td>' + S.since(r.since, state.tf) + '</td>' +
+          '<td><div class="scorecell"><span class="track"><i class="' + r.dir + '" style="width:' + Math.min(100, r.score) + '%"></i></span><b>' + r.score + '</b></div></td>' +
+          '<td class="num ' + (r.bulls ? 'up' : 'muted') + '">' + r.bulls + '</td>' +
+          '<td class="num ' + (r.bears ? 'down' : 'muted') + '">' + r.bears + '</td>' +
+          '<td' + (layers ? ' title="' + layers + ' compression signs on"' : '') + '>' + S.squeeze(r.squeeze) + '</td>' +
+          '<td>' + S.structure(r.rec, state.tf) + '</td>' +
+          '<td class="muted">' + S.esc(r.cap) + '</td></tr>';
+      }).join('');
+    }
+    $('more').hidden = list.length <= state.limit;
+    head();
+  }
+
+  function paintAll() {
+    prep(); fillFilters(); fresh();
+    board('bull', 'bullHint', 'bull'); board('bear', 'bearHint', 'bear');
+    $('tfnote').textContent = S.TF[state.tf].note;
+    render();
+  }
+
+  // ---- events
+  S.tfSwitch($('tf'), state.tf, function (tf) { state.tf = tf; state.limit = 100; S.setParams({ tf: tf === '1d' ? null : tf }); if (ALL.length) paintAll(); });
+  $('filters').addEventListener('input', function (e) {
+    var id = e.target.id;
+    if (id === 'q') state.q = e.target.value;
+    else if (id === 'dir') state.dir = e.target.value;
+    else if (id === 'min') { state.min = +e.target.value; $('minv').textContent = e.target.value; }
+    else if (id === 'within') state.within = +e.target.value;
+    else if (id === 'squeeze') state.squeeze = e.target.value;
+    else if (id === 'cap') state.cap = e.target.value;
+    else if (id === 'sector') state.sector = e.target.value;
+    state.limit = 100; render();
+  });
+  $('reset').addEventListener('click', function () {
+    state.q = ''; state.dir = 'all'; state.min = 40; state.within = 0; state.squeeze = 'all'; state.cap = 'all'; state.sector = 'all';
+    $('q').value = ''; $('dir').value = 'all'; $('min').value = 40; $('minv').textContent = '40'; $('squeeze').value = 'all';
+    fillFilters(); state.limit = 100; render();
+  });
+  $('head').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-sort]'); if (!b) return;
+    var k = b.dataset.sort;
+    if (state.sort === k) state.desc = !state.desc; else { state.sort = k; state.desc = !(k === 'symbol' || k === 'name' || k === 'since' || k === 'squeeze' || k === 'trend' || k === 'cap'); }
+    render();
+  });
+  $('body').addEventListener('click', function (e) {
+    if (e.target.closest('a')) return;
+    var tr = e.target.closest('tr[data-href]'); if (tr) window.location.href = tr.dataset.href;
+  });
+  $('moreBtn').addEventListener('click', function () { state.limit += 100; render(); });
+
+  head();
+  S.loadStocks().then(function (data) {
+    ALL = data; paintAll();
+  }).catch(function (err) {
+    $('body').innerHTML = '<tr><td colspan="10"><div class="err">Could not load the data (' + S.esc(err.message) + '). ' +
+      'Open this page from the website address. If you opened the file straight from your computer, run <code>python -m http.server</code> in the project folder and open <code>http://localhost:8000/signals/</code>.</div></td></tr>';
+  });
+})();
+</script>
+</body>
+</html>

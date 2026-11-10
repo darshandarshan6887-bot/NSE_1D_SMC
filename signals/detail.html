@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock signals - NSE scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="signals.css">
+</head>
+<body>
+<div class="topbar"><div class="wrap">
+  <span class="brand">NSE scanner</span>
+  <nav aria-label="Pages">
+    <a href="../index.html">Home</a>
+    <a href="index.html" id="navSignals" aria-current="page">Signals</a>
+    <a href="../main-dashboard/index.html">Structure</a>
+  </nav>
+</div></div>
+
+<main class="wrap">
+  <div class="crumbs"><a id="back" href="index.html">All signals</a></div>
+  <div class="head">
+    <div>
+      <h1 id="sym">Loading</h1>
+      <p class="co" id="co"></p>
+    </div>
+    <div>
+      <div class="price" id="price"></div>
+      <div class="muted" id="asof"></div>
+    </div>
+    <div class="links" id="links"></div>
+  </div>
+  <div style="margin-top:10px"><div class="seg" id="tf" role="group" aria-label="Timeframe"></div></div>
+  <p class="muted" id="struct" style="margin:10px 0 0"></p>
+
+  <div id="msg" aria-live="polite"></div>
+
+  <div id="content" hidden>
+    <section class="cards" id="cards" aria-label="Scores"></section>
+
+    <div class="grid2">
+      <section class="panel">
+        <h2>Price and signals</h2>
+        <div id="chart"></div>
+        <div class="legend">
+          <span><span class="mk bull"></span>Bullish signal</span>
+          <span><span class="mk bear"></span>Bearish signal</span>
+          <span><span class="mk neutral"></span>Neutral signal</span>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>What the indicators say now</h2>
+        <dl class="ctx" id="ctx"></dl>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>All signals</h2>
+      <p class="partkey" id="partkey"></p>
+      <div class="filters" id="dirFilter" role="group" aria-label="Show"></div>
+      <div class="tablewrap" style="margin:0">
+        <table style="min-width:760px">
+          <thead><tr>
+            <th scope="col">When</th><th scope="col">Signal</th><th scope="col">Direction</th>
+            <th scope="col">Score</th><th scope="col">Confirmation</th><th scope="col" class="num">Stop</th><th scope="col" class="num">Volume</th>
+          </tr></thead>
+          <tbody id="sigs"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="signals.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SIG;
+  var $ = function (id) { return document.getElementById(id); };
+  var symbol = (S.params().get('symbol') || '').toUpperCase();
+  var tf = S.tfFromUrl();
+  var rec = null, detail = null, dirShow = 'all';
+  var GROUP = { '1-candle': 'Single candle', '2-candle': 'Two candles', '3-candle': 'Three candles', extended: 'Multi-candle',
+                squeeze: 'Squeeze', volume: 'Volume', trend: 'Trend', structure: 'Price structure', range: 'Range' };
+  var OPACITY = [1, 0.8, 0.62, 0.46, 0.32];
+
+  function setBack() { $('back').href = 'index.html' + (tf === '1h' ? '?tf=1h' : ''); }
+
+  // ---------------------------------------------------------------- chart
+  function chartSvg(candles, sigs) {
+    var n = candles.length;
+    if (n < 2) return '<p class="muted">Not enough candles to draw a chart.</p>';
+    var W = 900, H = 380, L = 66, R = 14, T = 16, B = 26, VH = 58, G = 12;
+    var plotW = W - L - R, ph = H - T - B - VH - G;
+    var hi = -Infinity, lo = Infinity, vmax = 0;
+    candles.forEach(function (c) { hi = Math.max(hi, c[2]); lo = Math.min(lo, c[3]); vmax = Math.max(vmax, c[5] || 0); });
+    var pad = (hi - lo) * 0.1 || hi * 0.01; hi += pad * 1.3; lo -= pad * 1.5;   // room for the signal markers
+    var step = plotW / n, bw = Math.max(2, Math.min(14, step * 0.62));
+    function x(i) { return L + (i + 0.5) * step; }
+    function y(p) { return T + (hi - p) / (hi - lo) * ph; }
+    var out = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Price chart with signal markers">';
+    var k, p;
+    for (k = 0; k <= 4; k++) {
+      p = lo + (hi - lo) * k / 4;
+      out += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(p).toFixed(1) + '" y2="' + y(p).toFixed(1) + '"/>' +
+             '<text x="' + (L - 8) + '" y="' + (y(p) + 4).toFixed(1) + '" text-anchor="end">' +
+             p.toLocaleString('en-IN', { maximumFractionDigits: p < 100 ? 2 : 0 }) + '</text>';
+    }
+    var labels = Math.min(6, n);
+    for (k = 0; k < labels; k++) {
+      var i = labels === 1 ? 0 : Math.round(k * (n - 1) / (labels - 1));
+      var anchor = k === 0 ? 'start' : k === labels - 1 ? 'end' : 'middle';
+      out += '<text x="' + x(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '">' + S.esc(S.when(candles[i][0])) + '</text>';
+    }
+    var vbase = T + ph + G + VH;
+    candles.forEach(function (c, i) {
+      var up = c[4] >= c[1], cls = up ? 'upc' : 'dnc';
+      if (vmax > 0 && c[5] > 0) {
+        var vh = (c[5] / vmax) * VH;
+        out += '<rect class="vol ' + cls + '" x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + (vbase - vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + vh.toFixed(1) + '"/>';
+      }
+      out += '<line class="wick ' + cls + '" x1="' + x(i).toFixed(1) + '" x2="' + x(i).toFixed(1) + '" y1="' + y(c[2]).toFixed(1) + '" y2="' + y(c[3]).toFixed(1) + '"/>';
+      var top = y(Math.max(c[1], c[4])), hgt = Math.max(1, Math.abs(y(c[1]) - y(c[4])));
+      out += '<rect class="body ' + cls + '" x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hgt.toFixed(1) + '"/>';
+    });
+    var index = {}; candles.forEach(function (c, i) { index[c[0]] = i; });
+    var stack = {};
+    sigs.forEach(function (g) {
+      var i = index[g.time]; if (i === undefined) return;
+      var side = g.dir === 'bull' ? 'below' : 'above', key = i + side, s = stack[key] || 0; stack[key] = s + 1;
+      var cx = x(i), cy = side === 'below' ? y(candles[i][3]) + 11 + s * 11 : y(candles[i][2]) - 11 - s * 11;
+      var tip = g.name + ' (' + S.dirLabel(g.dir).toLowerCase() + ', score ' + g.score + ')';
+      var shape = g.dir === 'bull' ? '<path d="M' + cx.toFixed(1) + ' ' + (cy - 5).toFixed(1) + 'L' + (cx + 5).toFixed(1) + ' ' + (cy + 4).toFixed(1) + 'L' + (cx - 5).toFixed(1) + ' ' + (cy + 4).toFixed(1) + 'Z"/>'
+        : g.dir === 'bear' ? '<path d="M' + cx.toFixed(1) + ' ' + (cy + 5).toFixed(1) + 'L' + (cx + 5).toFixed(1) + ' ' + (cy - 4).toFixed(1) + 'L' + (cx - 5).toFixed(1) + ' ' + (cy - 4).toFixed(1) + 'Z"/>'
+        : '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="3.6"/>';
+      out += '<g class="mk ' + S.esc(g.dir) + '"><title>' + S.esc(tip) + '</title>' + shape + '</g>';
+    });
+    return out + '</svg>';
+  }
+
+  // ---------------------------------------------------------------- context readings
+  function yn(v) { return v ? 'Yes' : 'No'; }
+  function div(v) { return v === 'bullish' ? 'Bullish divergence' : v === 'bearish' ? 'Bearish divergence' : 'None'; }
+  function ctxRows(c) {
+    var rows = [];
+    function add(label, text, on) { rows.push('<dt>' + label + '</dt><dd' + (on ? ' class="on"' : '') + '>' + text + '</dd>'); }
+    var bb = c.bb_squeeze || {}, ttm = c.ttm_squeeze || {};
+    add('Squeeze', c.squeeze_state === 'fired' ? 'Fired' : c.squeeze_state === 'on' ? 'On' : 'Off', c.squeeze_state !== 'off');
+    add('Bollinger Bands tight', bb.on ? 'Yes, ' + bb.bars + (bb.bars === 1 ? ' candle' : ' candles') : 'No', bb.on);
+    add('TTM squeeze', ttm.on ? 'On' + (ttm.momentum_dir ? ', momentum ' + (ttm.momentum_dir === 'bull' ? 'up' : 'down') : '') : 'Off', ttm.on);
+    add('Range (ATR) narrowing', yn(c.atr_contraction), c.atr_contraction);
+    add('Volatility narrowing', yn(c.hv_contraction), c.hv_contraction);
+    add('Volume dried up', yn(c.volume_dry_up), c.volume_dry_up);
+    add('Donchian range tight', yn(c.donchian_squeeze), c.donchian_squeeze);
+    add('Moving averages bunched', yn(c.ma_ribbon_squeeze), c.ma_ribbon_squeeze);
+    add('Buying vs selling (OBV)', div(c.obv_divergence), c.obv_divergence !== 'none');
+    add('Accumulation (A/D line)', div(c.ad_divergence), c.ad_divergence !== 'none');
+    add('Money flow (CMF)', c.cmf === null || c.cmf === undefined ? '\u2013' : (c.cmf_state || '') + ' (' + c.cmf.toFixed(2) + ')');
+    add('Trend strength (ADX)', c.adx === null || c.adx === undefined ? '\u2013' : c.adx.toFixed(0) + (c.adx_state ? ', ' + c.adx_state : ''));
+    add('Choppiness', c.choppiness === null || c.choppiness === undefined ? '\u2013' : c.choppiness.toFixed(0));
+    add('Price vs Ichimoku cloud', c.ichimoku_cloud === 'above' ? 'Above' : c.ichimoku_cloud === 'below' ? 'Below' : c.ichimoku_cloud === 'inside' ? 'Inside' : '\u2013');
+    add('Volume vs normal', c.rel_volume === null || c.rel_volume === undefined ? '\u2013' : c.rel_volume.toFixed(1) + 'x');
+    add('Average daily move', c.atr_pct === null || c.atr_pct === undefined ? '\u2013' : c.atr_pct.toFixed(2) + '%');
+    return rows.join('');
+  }
+
+  // ---------------------------------------------------------------- signal table
+  function partsBar(g) {
+    var parts = g.parts || [];
+    var tip = S.PARTS.map(function (p, i) { return p[0] + ' ' + (parts[i] === undefined ? 0 : parts[i]) + ' of ' + p[1]; }).join(', ');
+    return '<span class="parts" title="' + S.esc(tip) + '" role="img" aria-label="' + S.esc(tip) + '">' +
+      S.PARTS.map(function (p, i) {
+        var v = parts[i] === undefined ? 0 : parts[i];
+        return '<span style="flex:' + p[1] + '"><i style="width:' + Math.round(v / p[1] * 100) + '%;opacity:' + OPACITY[i] + '"></i></span>';
+      }).join('') + '</span>';
+  }
+  function chip(c) {
+    if (c === 'confirmed') return '<span class="chip confirmed" title="A later candle closed beyond the pattern">Confirmed</span>';
+    if (c === 'failed') return '<span class="chip failed" title="Price closed against the pattern before confirming">Failed</span>';
+    if (c === 'pending') return '<span class="chip" title="Waiting for a close beyond the pattern">Pending</span>';
+    return '<span class="muted">\u2013</span>';
+  }
+  function sigRows(block) {
+    var list = (block.signals || []).filter(function (g) { return dirShow === 'all' || g.dir === dirShow; });
+    if (!list.length) return '<tr><td colspan="7" class="empty">No signals to show here.</td></tr>';
+    return list.map(function (g) {
+      return '<tr style="cursor:default"><td>' + S.esc(S.when(g.time)) + '<br><span class="muted">' + S.since(g.since, tf) + '</span></td>' +
+        '<td>' + S.esc(g.name) + '<br><span class="muted">' + S.esc(GROUP[g.group] || g.group) + '</span></td>' +
+        '<td>' + S.pill(g.dir) + '</td>' +
+        '<td><div class="scorecell"><b style="text-align:left">' + g.score + '</b>' + partsBar(g) + '</div></td>' +
+        '<td>' + chip(g.confirm) + '</td>' +
+        '<td class="num">' + (g.stop === null || g.stop === undefined ? '\u2013' : S.price(g.stop)) + '</td>' +
+        '<td class="num">' + (g.vol === null || g.vol === undefined ? '\u2013' : g.vol.toFixed(1) + 'x') + '</td></tr>';
+    }).join('');
+  }
+
+  // ---------------------------------------------------------------- page
+  function emptyMessage() {
+    var st = S.get(rec, 'signal_status', tf);
+    if (st === 'SKIPPED') return 'Bonds and funds get the market-structure scan only, so there are no pattern or indicator signals for this instrument.';
+    if (st === 'INSUFFICIENT_DATA') return 'This stock does not have enough price history for signals on the ' + S.TF[tf].label + ' timeframe yet.';
+    if (st === 'ERROR') return 'The signal calculation failed for this stock: ' + S.esc(S.get(rec, 'signal_error', tf) || 'unknown error') + '.';
+    return 'There is no ' + S.TF[tf].label + ' signal data for this stock yet. It appears after the next scan that includes it.';
+  }
+  function paint() {
+    setBack();
+    document.title = symbol + ' signals - NSE scanner';
+    $('sym').textContent = rec.symbol;
+    $('co').textContent = rec.company_name || '';
+    $('price').textContent = S.price(S.get(rec, 'current_price', tf));
+    var bar = S.get(rec, 'last_bar_time', tf) || S.get(rec, 'scan_date', tf);
+    $('asof').textContent = bar ? 'Candles up to ' + S.when(bar) : '';
+    var ev = S.get(rec, 'structure_event', tf);
+    $('struct').innerHTML = 'Structure: ' + S.structure(rec, tf) + (ev && ev !== 'NONE' ? ', last break was a ' + (ev === 'CHOCH' ? 'change of character' : 'break of structure') : '');
+    var links = [];
+    if (rec.tradingview_url) links.push('<a href="' + S.esc(rec.tradingview_url) + '" target="_blank" rel="noopener">Open in TradingView</a>');
+    links.push('<a href="../stock/index.html?symbol=' + encodeURIComponent(rec.symbol) + '">Structure page</a>');
+    $('links').innerHTML = links.join('');
+
+    var block = detail && detail[tf];
+    if (!block) {
+      $('content').hidden = true;
+      $('msg').innerHTML = '<div class="note">' + emptyMessage() + '</div>';
+      return;
+    }
+    $('msg').innerHTML = '';
+    $('content').hidden = false;
+    var sc = block.scores || {};
+    $('cards').innerHTML =
+      '<div class="card"><div class="k">Best score</div><div class="v">' + (sc.best || 0) + '</div><div class="s">out of 100</div></div>' +
+      '<div class="card bull"><div class="k">Best bullish score</div><div class="v">' + (sc.bull || 0) + '</div><div class="s">' + (S.num(S.get(rec, 'sig_bull_count', tf)) || 0) + ' bullish signals</div></div>' +
+      '<div class="card bear"><div class="k">Best bearish score</div><div class="v">' + (sc.bear || 0) + '</div><div class="s">' + (S.num(S.get(rec, 'sig_bear_count', tf)) || 0) + ' bearish signals</div></div>';
+    $('chart').innerHTML = chartSvg(block.candles || [], block.signals || []);
+    $('ctx').innerHTML = ctxRows(block.context || {});
+    $('partkey').innerHTML = 'The score adds up to 100 points: ' + S.PARTS.map(function (p) { return p[0] + ' <b>' + p[1] + '</b>'; }).join(', ') +
+      '. The bar in each row shows how many points that signal earned in each part, in the same order.';
+    var f = [['all', 'All'], ['bull', 'Bullish'], ['bear', 'Bearish'], ['neutral', 'Neutral']];
+    $('dirFilter').innerHTML = f.map(function (x) {
+      return '<button type="button" class="btn" data-dir="' + x[0] + '" aria-pressed="' + (dirShow === x[0]) + '">' + x[1] + '</button>';
+    }).join('');
+    $('sigs').innerHTML = sigRows(block);
+  }
+
+  S.tfSwitch($('tf'), tf, function (t) { tf = t; S.setParams({ tf: t === '1d' ? null : t }); if (rec) paint(); });
+  $('dirFilter').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-dir]'); if (!b) return;
+    dirShow = b.dataset.dir; paint();
+  });
+
+  if (!symbol) {
+    $('sym').textContent = 'No stock selected';
+    $('msg').innerHTML = '<div class="note">Pick a stock from the <a href="index.html">signals list</a>.</div>';
+    return;
+  }
+  Promise.all([
+    S.loadStocks(),
+    S.loadDetail(symbol).catch(function () { return null; })
+  ]).then(function (res) {
+    var found = res[0].filter(function (r) { return String(r.symbol).toUpperCase() === symbol; })[0];
+    if (!found) {
+      $('sym').textContent = symbol;
+      $('msg').innerHTML = '<div class="err">' + S.esc(symbol) + ' is not in the stock list. Check the spelling, or go back to the <a href="index.html">signals list</a>.</div>';
+      return;
+    }
+    rec = found; detail = res[1]; paint();
+  }).catch(function (err) {
+    $('sym').textContent = symbol;
+    $('msg').innerHTML = '<div class="err">Could not load the data (' + S.esc(err.message) + '). Open this page from the website address, or run <code>python -m http.server</code> in the project folder and open <code>http://localhost:8000/signals/</code>.</div>';
+  });
+})();
+</script>
+</body>
+</html>

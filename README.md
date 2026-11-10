@@ -1,106 +1,183 @@
-# NSE Dashboard System (rebuilt)
+# NSE SMC + Pattern Scanner and Dashboard
 
-A from-scratch, tested rewrite of the previous project. Same idea - scan the whole NSE
-universe for market-structure signals (Smart Money Concepts: swing highs/lows, BOS/CHoCH,
-Strong/Weak High/Low), on both daily and hourly candles - but with a corrected structure
-engine, one dashboard code path for every stock, and a test suite that runs without touching
-Yahoo Finance.
+Scans the whole NSE universe on two timeframes and shows the result in a static dashboard:
 
-## What changed vs. the previous version, and why
+* **Market structure (Smart Money Concepts):** swing highs/lows, BOS / CHoCH, Strong/Weak High/Low.
+* **Candlestick patterns (60) and 15 other signals:** squeeze, volume, trend and structure events, each scored 0-100.
 
-| Area | Previous version | Here | Why |
+| Timeframe | Scans per day | When (IST) | Candle used |
 |---|---|---|---|
-| Structure engine | Processed pivots in *pivot* order; a superseded swing level could still fire BOS/CHoCH; occasionally used the wrong swing (see `tests/test_engine.py::test_interleaved_breaks_use_time_order`) | Single pass in *time* order; only the current, unbroken pivot can fire | Matches what the chart actually shows bar-by-bar; verified against a naive reference implementation on 400+ random series |
-| Per-stock pages | ~3,270 generated HTML files, one per symbol, ~30 MB | One page, `stock/index.html?symbol=XXX` | Nothing to regenerate or go stale; identical content, 1/3000th the files |
-| stocks.json / stocks_1h.json | Two independent write paths; a crash could leave them inconsistent, or leave `NaN`/`Infinity` in the file | One writer (`common.save_stocks`); `stocks_1h.json` is always *derived* from `stocks.json` in the same atomic write, and `json.dumps(..., allow_nan=False)` makes bad floats impossible to write | The dashboards fetch these files raw; invalid JSON breaks them |
-| Price ticker | Bare symbol tried first, `.NS` second | `.NS` only | Dozens of NSE symbols (`TCS`, `STAR`, `SIS`, `MAZDA`, ...) are *also* real US tickers on Yahoo; the bare-symbol fallback could silently plot the wrong company |
-| Concurrent writes (scan + prices + enrich) | Each script read-modified-wrote the whole file; a slow scan racing a price refresh could clobber the other's results | A single-writer file lock (`shared-data/.write.lock`) around every read-modify-write | Verified in `tests/test_pipeline.py::test_concurrent_edit_is_not_clobbered` |
-| A failed Yahoo request | Sometimes wiped a symbol's last good scan | Kept, and flagged `scanner_status: STALE` | A network blip shouldn't erase real analysis |
-| Windows console crash | `enrich_stocks.py` printed `→` and crashed on `cp1252` | `common.py` forces UTF-8 on stdout/stderr at import; batch files also set `PYTHONUTF8=1` | Belt and suspenders |
-| Master pipeline | Stopped at the first failing step | Runs every requested step and reports all of them at the end | One broken step (e.g. NSE's site being down) shouldn't block the price refresh |
-| Universe bootstrap | Two overlapping scripts (`bootstrap_full_nse_universe.py`, `bootstrap_all_nse_all_types.py`) | One script, `update_universe.py`, incremental (adds new listings, flags delisted ones, never blind-deletes) | Re-running a "bootstrap from scratch" script is destructive; NSE data changes daily |
-| Testing | None found in the project | `tests/` - unit tests for the engine (against a reference implementation), the file store, freshness rules, the scan/price/enrich/universe pipelines (Yahoo mocked), plus a headless-browser check of both dashboard pages | So the next change can be verified without spending an hour scanning 3,000 stocks first |
+| **1D** | **1** | 15:50 (the daily candle is final at 15:45) | closed daily candle |
+| **1H** | **7** | 10:20 11:20 12:20 13:20 14:20 15:20 15:35 | the hourly candle that just closed (10:15 ... 15:15, plus the 15-minute 15:15-15:30 candle) |
+
+Only **closed** candles are analysed, so a signal never appears and then vanishes when the candle closes.
 
 ## Layout
 
 ```
-config.py            all tunable settings
-common.py            time/IST clock, atomic strict-JSON file store, locking, retry, logging
-smc_engine.py         the structure engine (pure functions, no I/O)
-market_data.py        Yahoo Finance access (thread-safe)
-index_data.py          static index-membership lists (fallback)
-universe_data.py       static index/REIT/InvIT lists (fallback)
-scan_market_structure_combined.py   1D + 1H structure scan
-refresh_all_prices.py               fast batch price refresh
-enrich_stocks.py                    sector / market cap / index membership / cap class
-update_universe.py                  keep stocks.json in sync with NSE's official lists
-update_index_lists.py               refresh the official index-constituent lists
-add_stock.py                        add one symbol
-validate_data.py                    sanity-check stocks.json
-cleanup_legacy_child_pages.py       one-off: remove the old per-stock HTML folders
-master_sync_all.py                  runs the pipeline in order
-main-dashboard/index.html           the dashboard (unchanged UI; source pointed at the fixed data)
-stock/index.html                    ONE generic per-stock page (1D/1H tabs) - replaces every child-*/
-shared-data/stocks.json             the data (stocks_1h.json is generated, never edit it)
-tests/                              unit + pipeline tests (no network required)
+config.py                            all settings, incl. the per-timeframe PROFILES (1D / 1H)
+common.py                            IST clock, atomic strict-JSON store, locks, retry, logging
+smc_engine.py                        the structure engine (pure functions, no I/O)
+indicators.py                        ATR, Bollinger, Keltner, ADX, OBV, CMF, Ichimoku ...
+patterns.py                          60 candlestick pattern detectors
+signals.py                           15 events, current-state readings, confirmation rule, 0-100 score
+schedule.py                          exactly when each timeframe is due
+detail_store.py                      per-stock detail files  shared-data/detail/<SYMBOL>.json
+market_data.py                       Yahoo access; drops the unfinished candle; keeps Volume
+scan_market_structure_combined.py    1D + 1H scan: structure + patterns + signals
+refresh_all_prices.py                fast batch price refresh
+enrich_stocks.py                     sector / market cap / index membership / cap class
+update_universe.py                   keep stocks.json in sync with NSE's official lists
+update_index_lists.py                refresh the index-constituent lists
+index_data.py, universe_data.py      static fallback lists
+add_stock.py                         add one symbol
+validate_data.py                     strict publish gate (see below)
+master_sync_all.py                   runs the pipeline steps in order
+cleanup_legacy_child_pages.py        one-off: remove old per-stock HTML folders
+index.html                           home page linking both dashboards
+signals/index.html, detail.html      Signals dashboard: top setups, filters, chart, score breakdown
+signals/signals.css, signals.js      its stylesheet and helpers
+main-dashboard/index.html            the US-style dashboard (tabs, Top 20 boards, SMC + pattern, 1D/1H switch)
+stock/index.html                     one per-stock page
+assets/style.css, common.js          the dashboard's stylesheet and data adapter
+levels.py                            support / resistance level finder (1H)
+build_board.py                       dashboard extras per timeframe -> shared-data/board_1d.json, board_1h.json
+shared-data/stocks.json              the data (seed is [] - run the universe step; stocks_1h.json, detail/, board_*.json are generated)
+shared-data/holidays.txt             optional NSE holiday list
+tests/                               unit + pipeline + schedule + signal + validation tests (no network)
+.github/workflows/scan.yml           the 8 daily GitHub runs, history trim, site deploy
+.github/workflows/pages.yml          publishes the site when you push changes
+.github/workflows/tests.yml          tests on every push
+.nojekyll                            lets GitHub Pages serve the folders as they are
+*.bat                                Windows launchers
 ```
 
-## First run
+## The dashboard (US-style)
 
-1. `install_requirements.bat`
-2. `run_daily_scan.bat` - full sync (steps: scan -> prices -> enrich -> validate)
-3. `start_dashboard.bat`, then open the page it prints/launches
+`index.html` opens `main-dashboard/index.html`, the same dashboard as the US scanner, on NSE data:
 
-If you're moving from the old project: keep your `shared-data/stocks.json` (drop it into
-`shared-data/` here) - the schema is unchanged, and every script fills in anything missing on
-its next run. You do **not** need the old `child-*` folders; `stock/index.html` replaces all of
-them. If you kept them around, `cleanup_legacy_child_pages.py` will delete them.
+* **Tabs:** SMC + pattern, SMC signals, Pattern signals, All symbols, Signal feed, Watchlist, with the Top 20 boards and filters.
+* **1D / 1H switch** in the header. The choice is remembered. "Signals (detailed)" opens the separate Signals pages.
+* **SMC + pattern tab, candle strips, relative volume:** read from `shared-data/board_1d.json` / `board_1h.json`,
+  built after every scan by `build_board.py` from the per-stock detail files. `stocks.json` itself stays small.
+* **Support / resistance levels:** found on 1H candles by `levels.py` during the hourly scan and shown on the stock page.
+  Switch off with `LEVELS_ON` in `config.py`.
+* `stock/index.html` is the per-stock page (candle chart, signals, indicators, levels).
 
-## Every day / every hour
+Currency is shown in rupees. Prices come from Yahoo, so values can differ slightly from NSE's own.
 
-- **Daily** (after market close): `run_daily_scan.bat`
-- **During market hours**: `run_hourly_scan.bat` - hourly scan only, a few minutes
-- **Occasionally** (NSE adds/removes listings): `update_nse_universe.bat`
-- **After March/September index rebalancing**: `python update_index_lists.py`, then
-  `python enrich_stocks.py --indices-only`
+## Deploying to a new GitHub account
 
-## Command-line reference
+1. Create a new repository and upload everything in this folder (keep the folder structure; the `.github`
+   folder must stay at the top level).
+2. **Settings > Actions > General > Workflow permissions:** choose *Read and write permissions*.
+3. **Settings > Pages > Build and deployment > Source: choose "GitHub Actions"** (not "Deploy from a branch").
+   The `deploy` job in `scan.yml` publishes the site after every scan, and `pages.yml` publishes when you push
+   changes yourself (scan commits made by the bot cannot trigger other workflows, which is why the scan workflow
+   publishes by itself). The site opens at `https://<user>.github.io/<repo>/`.
+4. **Actions > NSE scan > Run workflow** once, with steps `universe scan prices enrich board validate` and *force* ticked. The first
+   run covers the whole universe and is the slow one (up to about two hours). After that, each run only does
+   what a new candle made due.
+5. The scheduled runs (Monday to Friday) take over. The workflow file lists the exact cron lines.
+
+`shared-data/stocks.json` ships as an empty seed (`[]`). The `universe` step fills it with the real NSE lists. If NSE blocks GitHub's servers,
+run `update_nse_universe.bat` (or `python update_universe.py`) on your own computer once and commit the result.
+To rebuild from nothing: set `stocks.json` to `[]` and run `python master_sync_all.py --steps universe scan prices enrich board validate`.
+
+## Running locally
 
 ```
-python master_sync_all.py                              # scan, prices, enrich, validate
-python master_sync_all.py --steps scan prices           # a subset, in the order given
-python master_sync_all.py --force --workers 4            # gentler on Yahoo's rate limit
-
-python scan_market_structure_combined.py                 # smart: only what is stale
-python scan_market_structure_combined.py --timeframes 1h
-python scan_market_structure_combined.py --symbols TCS INFY --force
-python scan_market_structure_combined.py --limit 50       # quick smoke test
-
-python refresh_all_prices.py [--limit N] [--batch 100]
-python enrich_stocks.py [--force] [--indices-only] [--cap-method threshold]
+install_requirements.bat                      # first time
+python master_sync_all.py                     # scan, prices, enrich, validate
+python master_sync_all.py --steps scan        # one step
+python master_sync_all.py --force --workers 4 # gentler on Yahoo's rate limit
+python scan_market_structure_combined.py              # only what is due right now
+python scan_market_structure_combined.py --force      # everything, now
+python scan_market_structure_combined.py --timeframes 1h --limit 20
+python scan_market_structure_combined.py --no-signals # structure only (the old behaviour)
+python validate_data.py                       # the publish gate (--strict makes warnings errors)
 python update_universe.py [--dry-run] [--prune]
+python update_index_lists.py && python enrich_stocks.py --indices-only   # after March/September rebalancing
 python add_stock.py TCS "Tata Consultancy Services"
-python validate_data.py
+python -m pytest -q tests
 ```
 
-## Running the tests
+## Data contract
 
+`stocks.json` is a flat array, so the existing dashboard keeps working. Existing fields are unchanged.
+New fields use the same suffix convention (`name` for 1D, `name_1h` for 1H; `stocks_1h.json` exposes the 1H
+ones under the plain name):
+
+| Field | Meaning |
+|---|---|
+| `signal_status` | `OK`, `SKIPPED` (bonds / funds), `INSUFFICIENT_DATA` or `ERROR` |
+| `bars`, `last_bar_time` | candles analysed, time of the newest closed candle |
+| `sig_best_score`, `sig_bull_score`, `sig_bear_score` | 0-100 confluence scores |
+| `sig_best_name`, `sig_best_dir`, `sig_best_since` | the best signal, its direction, candles ago |
+| `sig_bull_name`, `sig_bull_since`, `sig_bear_name`, `sig_bear_since` | the best bullish and the best bearish signal and how many candles ago |
+| `sig_bull_count`, `sig_bear_count` | number of stored signals per direction |
+| `sig_top` | up to 3 best signals `{name, dir, since, score, confirm}` |
+| `squeeze_state`, `compression_layers` | `off` / `on` / `fired`, number of compression layers on |
+
+The heavy data is **not** in `stocks.json`. It lives in `shared-data/detail/<SYMBOL>.json`
+(`M&M` is stored as `M~26M.json`, see `detail_store.safe_name`):
+
+```json
+{"symbol": "TCS", "updated_at": "2026-11-06 15:50:12 IST",
+ "1d": {"last_bar_time", "bars", "signals": [...], "context": {...}, "scores": {...},
+        "candles": [[time, open, high, low, close, volume], ...]},
+ "1h": {...}}
 ```
-python -m unittest discover -s tests -t .
-```
 
-No network access is used; Yahoo responses are supplied as in-memory pandas DataFrames.
+## Timeframe settings (`config.PROFILES`) - starting values, tune after you watch real output
 
-## Design notes worth knowing
+| Setting | 1H | 1D |
+|---|---|---|
+| History downloaded | 700 days | 540 days |
+| Signals kept (formed within the last N candles) | 35 (5 sessions) | 20 (about a month) |
+| Freshness score fades to 0 over | 20 candles | 10 candles |
+| Inside Bar / NR4 / NR7 kept for | 7 candles | 3 candles |
+| "Lowest 20% of history" window | 441 candles | 126 candles |
+| OBV / A-D divergence window | 30 | 20 |
+| Candles saved for the chart | 40 | 60 |
+| Annualised-volatility factor | sqrt(7 x 252) | sqrt(252) |
 
-- **`scanner_status`** on every record is one of `PENDING_SCAN`, `OK`, `STALE` (Yahoo failed,
-  showing the last good scan), `ERROR` (failed and no prior scan exists), `INSUFFICIENT_DATA`
-  (fewer than `config.MIN_BARS` candles - typical for new listings, SME stocks, and most
-  indices/ETFs on the hourly timeframe), `NO_PIVOTS` (flat/no-data price history).
-- **Cap classification** (`config.CAP_METHOD`) defaults to `"rank"`: top 100 by market cap =
-  Large, next 150 = Mid, rest = Small (SEBI/AMFI definition) - this changes as prices move,
-  unlike a fixed rupee threshold. Switch to `"threshold"` in `config.py` if you'd rather have
-  fixed cut-offs.
-- **`NSE_DASH_HOME`** environment variable overrides where data/logs live, independent of
-  where the `.py` files sit - this is how the test suite runs against a throwaway folder
-  without touching your real `shared-data/`.
+The SMC swing length stays 50 on both timeframes. Bonds and funds (`SIGNAL_SKIP_GROUPS`) get the
+structure scan only.
+
+## What `validate_data.py` blocks
+
+It runs before every commit and exits 1 (so nothing is published) when: `stocks.json` is not strict JSON
+(NaN / Infinity), a symbol is duplicated or missing, a scanned record has an unknown status, a bad trend, a rank
+score outside 0-110, a non-positive price or a malformed date; a signal has a bad direction, a `since`
+outside the stored window or a score outside 0-100; a detail file or timeframe block is missing; or not one
+symbol scanned OK. Stale records only warn.
+
+## Design notes
+
+* `scanner_status` per record: `PENDING_SCAN`, `OK`, `STALE` (Yahoo failed, showing the last good scan),
+  `ERROR`, `INSUFFICIENT_DATA` (fewer than `config.MIN_BARS` candles), `NO_PIVOTS`.
+* A failed Yahoo request never wipes good data; the record is kept and marked `STALE`.
+* Cap classification defaults to rank (top 100 large, next 150 mid, rest small); change `CAP_METHOD` in `config.py`.
+* `NSE_DASH_HOME` overrides where data and logs live (the tests use it to run against a throwaway folder).
+* Only one pipeline run at a time (`shared-data/.pipeline.lock`).
+
+## Things to know
+
+* **Repo growth.** The 1H scan changes most detail files seven times a day, and every change is a commit. To stop
+  the repository growing without limit, the last step of `scan.yml` keeps only the newest 100 commits (it rewrites
+  history and force-pushes). Files are not affected, only old versions of them, so you cannot go back to an old
+  data snapshot. This needs the `main` branch to have **no branch protection** (a protected branch refuses the
+  force-push). GitHub frees the storage of the dropped commits with a delay, so the repository size shown in
+  Settings can lag. The per-stock detail files (instead of one giant `stocks.json`) keep each commit small.
+* **GitHub's runners and Yahoo.** Yahoo rate-limits shared cloud IPs more than home connections. The scan retries
+  and never wipes good data, but if many rows turn `STALE`, lower the worker count (`--workers`).
+* **Daily gap patterns.** Patterns the Handbook describes with a gap use the same relaxed rule on 1D as on 1H
+  (see the docstring in `patterns.py`), so 1D may show a few extra, weaker matches.
+* **Not modelled:** NSE holidays unless listed in `shared-data/holidays.txt`; special sessions.
+* **Two dashboards.** `main-dashboard/` and `stock/` are your original pages and are untouched. The new **Signals**
+  dashboard (`signals/`) reads the new fields and the detail files. It has the top ten bullish and bearish setups,
+  filters (direction, minimum score, formed within N candles, squeeze, size, sector), a sortable table, and a stock
+  page with a candlestick chart marking every signal, the score breakdown, the indicator readings and the full
+  signal list. The home page (`index.html`) links to both. To test locally: `python -m http.server` in the project
+  folder, then open `http://localhost:8000/`.
