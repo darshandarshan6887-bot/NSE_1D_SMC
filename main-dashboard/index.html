@@ -41,7 +41,11 @@
 
 <section class="filters" aria-label="Filters">
   <div class="field"><label for="fSearch">Symbol or name</label><input id="fSearch" type="search" placeholder="Search"></div>
-  <div class="field"><label for="fType">Type</label><select id="fType"><option value="">All</option><option>Stock</option><option>ETF</option></select></div>
+  <div class="field"><label for="fType">Type</label><select id="fType"><option value="">All</option></select></div>
+  <div class="field"><label for="fCap">Size</label><select id="fCap"><option value="">All sizes</option></select></div>
+  <div class="field"><label for="fSector">Sector</label><select id="fSector"><option value="">All sectors</option></select></div>
+  <div class="field"><label for="fIndex">Index</label><select id="fIndex"><option value="">Any index</option></select></div>
+  <div class="field"><label for="fSqueeze">Squeeze</label><select id="fSqueeze"><option value="">Any</option><option value="on">Squeeze on</option><option value="fired">Squeeze fired</option><option value="off">No squeeze</option></select></div>
   <div class="field"><label for="fSmc">SMC trend</label><select id="fSmc"><option value="">Any</option><option value="BULLISH">Bullish</option><option value="BEARISH">Bearish</option></select></div>
   <div class="field"><label for="fStrength">SMC strength</label><select id="fStrength"><option value="">Strong and weak</option><option value="STRONG">Strong only</option><option value="WEAK">Weak only</option></select></div>
   <div class="field"><label for="fEvent">Last structure event</label><select id="fEvent"><option value="">Any</option><option value="BOS">BOS</option><option value="CHOCH">CHoCH</option></select></div>
@@ -89,7 +93,7 @@ let DATA = null, LIVE = [], META = {};
 let watch = getWatch();
 const $ = (s, r=document) => r.querySelector(s);
 const stockUrl = sym => '../stock/index.html?symbol=' + encodeURIComponent(sym) + '&tf=' + NSE_TF;
-const DEFAULT_F = {q:'', type:'', smc:'', strength:'', event:'', age:'', group:'', pat:'', win:NSE_TF === '1h' ? 20 : 10, conf:0, status:'', confirm:'confirmed', only:false};
+const DEFAULT_F = {q:'', type:'', cap:'', sector:'', index:'', squeeze:'', smc:'', strength:'', event:'', age:'', group:'', pat:'', win:NSE_TF === '1h' ? 20 : 10, conf:0, status:'', confirm:'confirmed', only:false};
 const state = { tab: 'combo', f: {...DEFAULT_F}, all: {key: 'conf', dir: -1, page: 1, per: 25},
   t: { smcHigh: {key:'rank', dir:-1, page:1}, smcLow: {key:'rank', dir:-1, page:1}, patBull: {key:'score', dir:-1, page:1}, patBear: {key:'score', dir:-1, page:1},
     comboLow: {key:'rank', dir:-1, page:1}, comboHigh: {key:'rank', dir:-1, page:1} } };
@@ -131,7 +135,9 @@ function levelCell(m, key){      // High/Low signal: pill + how long ago the lev
 function symbolOk(s){
   const f = state.f, q = f.q.trim().toLowerCase(), m = s.smc || {};
   return (!q || s.symbol.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q))
-    && (!f.type || s.type === f.type) && (!f.smc || m.trend === f.smc) && (!f.status || s.scanner_status === f.status)
+    && (!f.type || s.type === f.type) && (!f.cap || s.cap_category === f.cap) && (!f.sector || s.sector === f.sector)
+    && (!f.index || (s.index_memberships || []).includes(f.index)) && (!f.squeeze || ((s.context || {}).squeeze_state || 'off') === f.squeeze)
+    && (!f.smc || m.trend === f.smc) && (!f.status || s.scanner_status === f.status)
     && (!f.event || m.structure_event === f.event);
 }
 /* SMC rows: side 'high' uses the trailing high (Strong/Weak High, bearish rank), 'low' the trailing low. */
@@ -418,7 +424,7 @@ document.addEventListener('click', e => {
   const open = e.target.closest('[data-open]') || e.target.closest('tr.row[data-sym]');
   if (open) location.href = stockUrl(open.dataset.open || open.dataset.sym);
 });
-const FILTER_IDS = {q:'#fSearch', type:'#fType', smc:'#fSmc', strength:'#fStrength', event:'#fEvent', age:'#fAge', group:'#fGroup', pat:'#fPat', win:'#fWin', conf:'#fConf', status:'#fStatus', confirm:'#fConfirm'};
+const FILTER_IDS = {q:'#fSearch', type:'#fType', cap:'#fCap', sector:'#fSector', index:'#fIndex', squeeze:'#fSqueeze', smc:'#fSmc', strength:'#fStrength', event:'#fEvent', age:'#fAge', group:'#fGroup', pat:'#fPat', win:'#fWin', conf:'#fConf', status:'#fStatus', confirm:'#fConfirm'};
 function resetPages(){ Object.values(state.t).forEach(t => t.page = 1); state.all.page = 1; }
 function bindFilters(){
   Object.entries(FILTER_IDS).forEach(([key, id]) => $(id).addEventListener('input', e => {
@@ -438,6 +444,13 @@ function bindFilters(){
 function buildFilterOptions(){
   const wins = META.window_options || [3, 6, 7, 10, 14, 20, 35];
   $('#fWin').innerHTML = wins.map(w => '<option value="' + w + '"' + (w === (META.top_board_window || 10) ? ' selected' : '') + '>' + w + (NSE_TF === '1h' ? ' candles' + (w === 7 ? ' (about 1 day)' : w === 35 ? ' (5 days)' : '') : (w === 1 ? ' day' : ' days')) + '</option>').join('');
+  const uniq = f => [...new Set(LIVE.map(f).filter(v => v && v !== 'NA'))].sort();
+  const CAPN = {LARGE_CAP:'Large cap', MID_CAP:'Mid cap', SMALL_CAP:'Small cap', SME:'SME'}, caps = uniq(s => s.cap_category);
+  caps.sort((a, b) => (Object.keys(CAPN).indexOf(a) + 1 || 99) - (Object.keys(CAPN).indexOf(b) + 1 || 99));
+  $('#fType').innerHTML = '<option value="">All</option>' + uniq(s => s.type).map(t => '<option>' + esc(t) + '</option>').join('');
+  $('#fCap').innerHTML = '<option value="">All sizes</option>' + caps.map(c => '<option value="' + esc(c) + '">' + esc(CAPN[c] || c) + '</option>').join('');
+  $('#fSector').innerHTML = '<option value="">All sectors</option>' + uniq(s => s.sector).map(c => '<option>' + esc(c) + '</option>').join('');
+  $('#fIndex').innerHTML = '<option value="">Any index</option>' + [...new Set(LIVE.flatMap(s => s.index_memberships || []))].sort().map(c => '<option>' + esc(c) + '</option>').join('');
   const groups = {}, names = {};
   LIVE.forEach(s => (s.signals || []).forEach(g => { groups[g.group] = 1; (names[g.group] = names[g.group] || {})[g.name] = 1; }));
   const order = ['1-candle','2-candle','3-candle','extended','squeeze','volume','trend','structure','range'];
