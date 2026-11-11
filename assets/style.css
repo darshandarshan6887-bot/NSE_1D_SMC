@@ -142,7 +142,7 @@ tbody tr.row td { cursor: pointer; }
 .sec h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .sec p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(540px, 1fr)); gap: 14px; margin-bottom: 14px; }
-.tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow: hidden; }
+.tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow-x: auto; overflow-y: hidden; }
 .tcard .head { padding: 12px 14px 8px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .tcard .head h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .tcard .head h3.bull { color: var(--bull); } .tcard .head h3.bear { color: var(--bear); }
@@ -166,3 +166,22 @@ td.idx { color: var(--muted); width: 34px; }
 /* pattern tables carry a Status column: tighten a little so both tables still fit side by side on a wide screen */
 .tcard .conf { min-width: 78px; }
 .tcard th, .tcard td { padding-left: 6px; padding-right: 6px; }
+
+/* multi-select filters (checkbox dropdowns), date range and bar chips */
+.ms { position: relative; }
+.ms-btn { width: 100%; text-align: left; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 24px 6px 8px; cursor: pointer; color: var(--text); font: inherit; position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-btn::after { content: "\25BE"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.ms-btn.on { border-color: var(--focus); }
+.ms-panel { display: none; position: absolute; z-index: 30; left: 0; right: 0; min-width: 190px; margin-top: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35); padding: 8px; }
+.ms-panel.open { display: block; }
+.ms-search { width: 100%; margin-bottom: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); }
+.ms-list { max-height: 240px; overflow-y: auto; }
+.ms-opt { display: flex !important; gap: 8px; align-items: center; margin: 0 !important; padding: 4px 4px; font-size: 13.5px !important; color: var(--text) !important; cursor: pointer; border-radius: 4px; }
+.ms-opt:hover { background: var(--surface-2); }
+.ms-clear { margin-top: 6px; width: 100%; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px; color: var(--muted); cursor: pointer; }
+.field input[type=date] { width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); color-scheme: light dark; }
+.filters .wide { grid-column: 1 / -1; }
+.bars { display: flex; flex-wrap: wrap; gap: 4px; }
+.bar-btn { min-width: 34px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; font: inherit; font-size: 12.5px; }
+.bar-btn.inc { background: var(--bull); border-color: var(--bull); color: #fff; }
+.bar-btn.exc { background: var(--bear); border-color: var(--bear); color: #fff; }

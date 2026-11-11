@@ -41,11 +41,17 @@
 
 <section class="filters" aria-label="Filters">
   <div class="field"><label for="fSearch">Symbol or name</label><input id="fSearch" type="search" placeholder="Search"></div>
-  <div class="field"><label for="fType">Type</label><select id="fType"><option value="">All</option></select></div>
-  <div class="field"><label for="fCap">Size</label><select id="fCap"><option value="">All sizes</option></select></div>
-  <div class="field"><label for="fSector">Sector</label><select id="fSector"><option value="">All sectors</option></select></div>
-  <div class="field"><label for="fIndex">Index</label><select id="fIndex"><option value="">Any index</option></select></div>
+  <div class="field ms" id="msType"><label>Instrument group</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
+  <div class="field ms" id="msCap"><label>Cap category</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
+  <div class="field ms" id="msSector"><label>Sector</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
+  <div class="field ms" id="msIndex"><label>Index membership</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
   <div class="field"><label for="fSqueeze">Squeeze</label><select id="fSqueeze"><option value="">Any</option><option value="on">Squeeze on</option><option value="fired">Squeeze fired</option><option value="off">No squeeze</option></select></div>
+  <div class="field ms" id="msHi"><label>High signals</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
+  <div class="field ms" id="msLo"><label>Low signals</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
+  <div class="field ms" id="msQuick"><label>Signal quick filter</label><button type="button" class="ms-btn"></button><div class="ms-panel"></div></div>
+  <div class="field"><label for="fFrom">From date</label><input id="fFrom" type="date"></div>
+  <div class="field"><label for="fTo">To date</label><input id="fTo" type="date"></div>
+  <div class="field check"><label><input id="fRegular" type="checkbox"> Regular equity only</label></div>
   <div class="field"><label for="fSmc">SMC trend</label><select id="fSmc"><option value="">Any</option><option value="BULLISH">Bullish</option><option value="BEARISH">Bearish</option></select></div>
   <div class="field"><label for="fStrength">SMC strength</label><select id="fStrength"><option value="">Strong and weak</option><option value="STRONG">Strong only</option><option value="WEAK">Weak only</option></select></div>
   <div class="field"><label for="fEvent">Last structure event</label><select id="fEvent"><option value="">Any</option><option value="BOS">BOS</option><option value="CHOCH">CHoCH</option></select></div>
@@ -57,6 +63,7 @@
   <div class="field"><label for="fConf">Min confluence <span class="val" id="fConfVal">0</span></label><input id="fConf" type="range" min="0" max="90" step="5" value="0"></div>
   <div class="field"><label for="fStatus">Data status</label><select id="fStatus"><option value="">Any</option><option>OK</option><option>STALE</option></select></div>
   <div class="field check"><label><input id="fOnly" type="checkbox"> Only symbols with a pattern (All symbols tab)</label></div>
+  <div class="field wide"><label>Latest candle filter <span class="muted small">(signal formed N candles ago: click once = include, twice = exclude, three times = off)</span></label><div class="bars" id="barRow"></div></div>
   <div class="actions"><button class="btn" id="fReset" type="button">Reset filters</button></div>
 </section>
 
@@ -93,7 +100,7 @@ let DATA = null, LIVE = [], META = {};
 let watch = getWatch();
 const $ = (s, r=document) => r.querySelector(s);
 const stockUrl = sym => '../stock/index.html?symbol=' + encodeURIComponent(sym) + '&tf=' + NSE_TF;
-const DEFAULT_F = {q:'', type:'', cap:'', sector:'', index:'', squeeze:'', smc:'', strength:'', event:'', age:'', group:'', pat:'', win:NSE_TF === '1h' ? 20 : 10, conf:0, status:'', confirm:'confirmed', only:false};
+const DEFAULT_F = {q:'', squeeze:'', from:'', to:'', regular:false, smc:'', strength:'', event:'', age:'', group:'', pat:'', win:NSE_TF === '1h' ? 20 : 10, conf:0, status:'', confirm:'confirmed', only:false};
 const state = { tab: 'combo', f: {...DEFAULT_F}, all: {key: 'conf', dir: -1, page: 1, per: 25},
   t: { smcHigh: {key:'rank', dir:-1, page:1}, smcLow: {key:'rank', dir:-1, page:1}, patBull: {key:'score', dir:-1, page:1}, patBear: {key:'score', dir:-1, page:1},
     comboLow: {key:'rank', dir:-1, page:1}, comboHigh: {key:'rank', dir:-1, page:1} } };
@@ -132,24 +139,69 @@ function levelCell(m, key){      // High/Low signal: pill + how long ago the lev
 }
 
 /* ---------- filters ---------- */
-function symbolOk(s){
+const CAPN = {LARGE_CAP:'Large cap', MID_CAP:'Mid cap', SMALL_CAP:'Small cap', SME:'SME', NA:'NA'};
+const MSF = {};                                   // multi-select key -> Set of ticked values (empty = everything)
+const msOk = (k, v) => !MSF[k] || MSF[k].size === 0 || MSF[k].has(String(v ?? '').toUpperCase());
+const msOkArr = (k, arr) => !MSF[k] || MSF[k].size === 0 || (arr || []).some(v => MSF[k].has(String(v).toUpperCase()));
+const normSig = v => { const x = String(v ?? '').toUpperCase().replace(/\s+/g, '_'); return !x || x === 'NA' || x === 'NOSIGNAL' ? 'NO_SIGNAL' : x; };
+const BAR_STATE = {};                             // candles-ago -> 'inc' | 'exc'
+function barOk(n){
+  const inc = [], exc = [];
+  Object.entries(BAR_STATE).forEach(([k, v]) => (v === 'inc' ? inc : exc).push(+k));
+  if (!inc.length && !exc.length) return true;
+  if (n == null || n < 0) return false;
+  return (!inc.length || inc.includes(n)) && !exc.includes(n);
+}
+function syncBars(){ document.querySelectorAll('#barRow .bar-btn').forEach(b => { const s = b.dataset.bar === 'ALL' ? (Object.keys(BAR_STATE).length ? '' : 'inc') : BAR_STATE[b.dataset.bar]; b.className = 'bar-btn' + (s ? ' ' + s : ''); }); }
+function dateOk(t){
+  const f = state.f; if (!f.from && !f.to) return true;
+  const d = String(t || '').slice(0, 10); if (!/^\d{4}-\d\d-\d\d$/.test(d)) return false;
+  return (!f.from || d >= f.from) && (!f.to || d <= f.to);
+}
+function barsSince(m){
+  if (m.bars_since_signal != null && m.bars_since_signal >= 0) return m.bars_since_signal;
+  const c = [m.top_bars_since, m.bottom_bars_since].filter(v => v != null && v >= 0);
+  return c.length ? Math.min(...c) : null;
+}
+function msBuild(key, id, allLabel, options, withSearch){
+  const el = $(id), btn = el.querySelector('.ms-btn'), panel = el.querySelector('.ms-panel'), sel = MSF[key] = new Set();
+  panel.innerHTML = (withSearch ? '<input class="ms-search" type="text" placeholder="Search…">' : '') +
+    '<div class="ms-list">' + options.map(o => '<label class="ms-opt"><input type="checkbox" value="' + esc(String(o.v).toUpperCase()) + '"> ' + esc(o.t) + '</label>').join('') + '</div>' +
+    '<button type="button" class="ms-clear">Clear selection</button>';
+  const label = () => { btn.textContent = !sel.size ? allLabel : sel.size === 1 ? (options.find(o => String(o.v).toUpperCase() === [...sel][0]) || {t: [...sel][0]}).t : sel.size + ' selected'; btn.classList.toggle('on', sel.size > 0); };
+  const changed = () => { label(); resetPages(); renderFull(); };
+  panel.addEventListener('change', e => { const c = e.target; if (c.type === 'checkbox') { c.checked ? sel.add(c.value) : sel.delete(c.value); changed(); } });
+  panel.querySelector('.ms-clear').addEventListener('click', () => { sel.clear(); panel.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false); changed(); });
+  const se = panel.querySelector('.ms-search');
+  if (se) se.addEventListener('input', () => panel.querySelectorAll('.ms-opt').forEach(o => o.style.display = o.textContent.toLowerCase().includes(se.value.toLowerCase()) ? '' : 'none'));
+  btn.addEventListener('click', e => { e.stopPropagation(); const open = !panel.classList.contains('open'); document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open')); if (open) panel.classList.add('open'); });
+  panel.addEventListener('click', e => e.stopPropagation());
+  el._reset = () => { sel.clear(); panel.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false); if (se) { se.value = ''; panel.querySelectorAll('.ms-opt').forEach(o => o.style.display = ''); } label(); };
+  label();
+}
+document.addEventListener('click', () => document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open')));
+function symbolOk(s, sideOnly){
   const f = state.f, q = f.q.trim().toLowerCase(), m = s.smc || {};
-  return (!q || s.symbol.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q))
-    && (!f.type || s.type === f.type) && (!f.cap || s.cap_category === f.cap) && (!f.sector || s.sector === f.sector)
-    && (!f.index || (s.index_memberships || []).includes(f.index)) && (!f.squeeze || ((s.context || {}).squeeze_state || 'off') === f.squeeze)
+  const hay = [s.symbol, s.name, s.type, s.sector, s.industry, s.cap_category, m.trend, m.signal, m.top_signal, m.bottom_signal, ...(s.index_memberships || [])].join(' ').toLowerCase();
+  return (!q || hay.includes(q))
+    && msOk('type', s.type) && msOk('cap', s.cap_category) && msOk('sector', s.sector) && msOkArr('index', s.index_memberships)
+    && msOk('quick', normSig(m.signal)) && (!f.regular || s.is_regular_equity === true)
+    && (!f.squeeze || ((s.context || {}).squeeze_state || 'off') === f.squeeze)
     && (!f.smc || m.trend === f.smc) && (!f.status || s.scanner_status === f.status)
-    && (!f.event || m.structure_event === f.event);
+    && (!f.event || m.structure_event === f.event)
+    && (sideOnly || ((dateOk(m.last_signal_time) || dateOk(m.top_signal_time) || dateOk(m.bottom_signal_time)) && barOk(barsSince(m))));
 }
 /* SMC rows: side 'high' uses the trailing high (Strong/Weak High, bearish rank), 'low' the trailing low. */
 function smcRows(side, filtered){
   const key = side === 'high' ? 'top' : 'bottom', f = state.f;
-  return (filtered ? LIVE.filter(symbolOk) : LIVE).map(s => {
+  return (filtered ? LIVE.filter(s => symbolOk(s, true)) : LIVE).map(s => {
     const m = s.smc || {}, level = m[key + '_signal_price'];
     return {s, sig: m[key + '_signal'], level, time: m[key + '_signal_time'], since: m[key + '_bars_since'],
       rank: side === 'high' ? m.bearish_rank_score : m.bullish_rank_score,
       away: level ? (side === 'high' ? (level - s.price) / s.price : (s.price - level) / level) * 100 : null};
   }).filter(r => SIG[r.sig]
-    && (!filtered || ((!f.strength || r.sig.startsWith(f.strength)) && (f.age === '' || (r.since != null && r.since >= 0 && r.since <= +f.age)))));
+    && (!filtered || ((!f.strength || r.sig.startsWith(f.strength)) && (f.age === '' || (r.since != null && r.since >= 0 && r.since <= +f.age))
+    && msOk(side === 'high' ? 'hi' : 'lo', r.sig) && dateOk(r.time) && barOk(r.since))));
 }
 /* Pattern rows: every symbol with at least one bullish (or bearish) signal in the window that passes the confirmation rule.
    Failed patterns never count. The Top 20 boards always use "confirmed" (patStatus in assets/common.js). */
@@ -234,6 +286,7 @@ const smcCols = side => [
   {k:'level', t: side === 'high' ? 'High level' : 'Low level', num:true, get: r => r.level, cell: r => '₹' + money(r.level) + '<br><span class="muted small">' + (r.away == null ? '–' : r.away.toFixed(1) + '% ' + (side === 'high' ? 'below' : 'above')) + '</span>'},
   {k:'since', t:'Set', get: r => r.since ?? 999, cell: r => '<span class="small">' + esc(fmtTime(r.time)) + '</span><br><span class="muted small">' + (r.since != null && r.since >= 0 ? agoText(r.since) : '–') + '</span>'},
   {k:'rank', t:'Rank', num:true, get: r => r.rank ?? -1, cell: r => '<b style="color:var(--' + (side === 'high' ? 'bear' : 'bull') + ')">' + (r.rank != null ? Number(r.rank).toFixed(1) : '–') + '</b>'},
+  {k:'cap', t:'Cap / sector', get: r => (r.s.cap_category || '') + (r.s.sector || ''), cell: r => '<span class="small">' + esc(CAPN[r.s.cap_category] || r.s.cap_category || '–') + '</span><br><span class="muted small">' + esc(r.s.sector && r.s.sector !== 'NA' ? r.s.sector : '–') + '</span>'},
   {k:'price', t:'Price', num:true, get: r => r.s.price, cell: r => priceCell(r.s)}
 ];
 const patCols = dir => [
@@ -424,7 +477,7 @@ document.addEventListener('click', e => {
   const open = e.target.closest('[data-open]') || e.target.closest('tr.row[data-sym]');
   if (open) location.href = stockUrl(open.dataset.open || open.dataset.sym);
 });
-const FILTER_IDS = {q:'#fSearch', type:'#fType', cap:'#fCap', sector:'#fSector', index:'#fIndex', squeeze:'#fSqueeze', smc:'#fSmc', strength:'#fStrength', event:'#fEvent', age:'#fAge', group:'#fGroup', pat:'#fPat', win:'#fWin', conf:'#fConf', status:'#fStatus', confirm:'#fConfirm'};
+const FILTER_IDS = {q:'#fSearch', squeeze:'#fSqueeze', from:'#fFrom', to:'#fTo', smc:'#fSmc', strength:'#fStrength', event:'#fEvent', age:'#fAge', group:'#fGroup', pat:'#fPat', win:'#fWin', conf:'#fConf', status:'#fStatus', confirm:'#fConfirm'};
 function resetPages(){ Object.values(state.t).forEach(t => t.page = 1); state.all.page = 1; }
 function bindFilters(){
   Object.entries(FILTER_IDS).forEach(([key, id]) => $(id).addEventListener('input', e => {
@@ -436,7 +489,8 @@ function bindFilters(){
   $('#fReset').addEventListener('click', () => {
     state.f = {...DEFAULT_F}; resetPages();
     Object.entries(FILTER_IDS).forEach(([key, id]) => { $(id).value = key === 'win' ? String(NSE_TF === '1h' ? 20 : 10) : key === 'conf' ? '0' : key === 'confirm' ? 'confirmed' : ''; });
-    $('#fConfVal').textContent = '0'; $('#fOnly').checked = false; renderFull();
+    $('#fConfVal').textContent = '0'; $('#fOnly').checked = false; $('#fRegular').checked = false;
+    document.querySelectorAll('.ms').forEach(el => el._reset && el._reset()); Object.keys(BAR_STATE).forEach(k => delete BAR_STATE[k]); syncBars(); renderFull();
   });
   $('#prev').addEventListener('click', () => { state.all.page--; renderAllTab(); });
   $('#next').addEventListener('click', () => { state.all.page++; renderAllTab(); });
@@ -445,12 +499,23 @@ function buildFilterOptions(){
   const wins = META.window_options || [3, 6, 7, 10, 14, 20, 35];
   $('#fWin').innerHTML = wins.map(w => '<option value="' + w + '"' + (w === (META.top_board_window || 10) ? ' selected' : '') + '>' + w + (NSE_TF === '1h' ? ' candles' + (w === 7 ? ' (about 1 day)' : w === 35 ? ' (5 days)' : '') : (w === 1 ? ' day' : ' days')) + '</option>').join('');
   const uniq = f => [...new Set(LIVE.map(f).filter(v => v && v !== 'NA'))].sort();
-  const CAPN = {LARGE_CAP:'Large cap', MID_CAP:'Mid cap', SMALL_CAP:'Small cap', SME:'SME'}, caps = uniq(s => s.cap_category);
-  caps.sort((a, b) => (Object.keys(CAPN).indexOf(a) + 1 || 99) - (Object.keys(CAPN).indexOf(b) + 1 || 99));
-  $('#fType').innerHTML = '<option value="">All</option>' + uniq(s => s.type).map(t => '<option>' + esc(t) + '</option>').join('');
-  $('#fCap').innerHTML = '<option value="">All sizes</option>' + caps.map(c => '<option value="' + esc(c) + '">' + esc(CAPN[c] || c) + '</option>').join('');
-  $('#fSector').innerHTML = '<option value="">All sectors</option>' + uniq(s => s.sector).map(c => '<option>' + esc(c) + '</option>').join('');
-  $('#fIndex').innerHTML = '<option value="">Any index</option>' + [...new Set(LIVE.flatMap(s => s.index_memberships || []))].sort().map(c => '<option>' + esc(c) + '</option>').join('');
+  const capOrder = Object.keys(CAPN), caps = [...new Set(LIVE.map(s => s.cap_category).filter(Boolean))].sort((a, b) => (capOrder.indexOf(a) + 1 || 99) - (capOrder.indexOf(b) + 1 || 99));
+  msBuild('type', '#msType', 'All instruments', uniq(s => s.type).map(v => ({v, t: v})), false);
+  msBuild('cap', '#msCap', 'All caps', caps.map(v => ({v, t: CAPN[v] || v})), false);
+  msBuild('sector', '#msSector', 'All sectors', uniq(s => s.sector).map(v => ({v, t: v})), true);
+  msBuild('index', '#msIndex', 'All indices', [...new Set(LIVE.flatMap(s => s.index_memberships || []))].sort().map(v => ({v, t: v})), true);
+  msBuild('hi', '#msHi', 'All High signals', [{v:'STRONG_HIGH', t:'Strong High'}, {v:'WEAK_HIGH', t:'Weak High'}], false);
+  msBuild('lo', '#msLo', 'All Low signals', [{v:'STRONG_LOW', t:'Strong Low'}, {v:'WEAK_LOW', t:'Weak Low'}], false);
+  msBuild('quick', '#msQuick', 'All states', [{v:'STRONG_LOW', t:'Strong Low'}, {v:'WEAK_LOW', t:'Weak Low'}, {v:'STRONG_HIGH', t:'Strong High'}, {v:'WEAK_HIGH', t:'Weak High'}, {v:'NO_SIGNAL', t:'No Signal'}], false);
+  $('#barRow').innerHTML = ['ALL'].concat(Array.from({length: 21}, (_, i) => i)).map(n => '<button type="button" class="bar-btn" data-bar="' + n + '" title="' + (n === 'ALL' ? 'Show every candle' : 'Signal formed ' + n + ' candles ago') + '">' + n + '</button>').join('');
+  $('#barRow').addEventListener('click', e => {
+    const b = e.target.closest('.bar-btn'); if (!b) return;
+    if (b.dataset.bar === 'ALL') { Object.keys(BAR_STATE).forEach(k => delete BAR_STATE[k]); }
+    else { const n = b.dataset.bar, cur = BAR_STATE[n]; if (!cur) BAR_STATE[n] = 'inc'; else if (cur === 'inc') BAR_STATE[n] = 'exc'; else delete BAR_STATE[n]; }
+    syncBars(); resetPages(); renderFull();
+  });
+  syncBars();
+  $('#fRegular').addEventListener('change', e => { state.f.regular = e.target.checked; resetPages(); renderFull(); });
   const groups = {}, names = {};
   LIVE.forEach(s => (s.signals || []).forEach(g => { groups[g.group] = 1; (names[g.group] = names[g.group] || {})[g.name] = 1; }));
   const order = ['1-candle','2-candle','3-candle','extended','squeeze','volume','trend','structure','range'];

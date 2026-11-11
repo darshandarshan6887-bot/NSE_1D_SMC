@@ -43,7 +43,7 @@ function adaptStock(r){
     smc: smc, signals: sigs,
     context: {squeeze_state: g('squeeze_state'), compression_layers: new Array(nLayers).fill('layer')},
     scores: {bull: nnum(g('sig_bull_score')) || 0, bear: nnum(g('sig_bear_score')) || 0, best: nnum(g('sig_best_score')) || 0},
-    candles: [], sector: r.sector, cap_category: r.cap_category, index_memberships: r.index_memberships
+    candles: [], sector: r.sector, industry: r.industry, cap_category: r.cap_category, index_memberships: r.index_memberships, is_regular_equity: r.is_regular_equity === true
   };
 }
 async function loadData(){
